@@ -29,13 +29,40 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
 
   Image *this = mem_alloc_clear(1, sizeof(Image));
 
-  int mp_prec = mp_get_prec(x_center);  // KLUDGE for now
+  // Calculate floating-point precision required.
+  real bits;
+  {
+    mp_real log2_xy_min_size;
+    mp_init2(log2_xy_min_size, 64);  // (Overkill; only need about 8 or 10)
+    mp_log2(log2_xy_min_size, xy_min_size, MP_ROUND);  // Typically negative.
+    bits = -mp_get_d(log2_xy_min_size, MP_ROUND);
+    mp_clear(log2_xy_min_size);
+    if (bits < 0) bits = 0;
+  }
+  // bits now contains the number of bits to the right of the radix point of
+  // xy_min_size.  Next, add enough more bits to support the largest scalar
+  // value possible during Mandelbrot Set iteration.
+  bits += log2(mandelbrot_max_scalar_value_during_iteration());
+  // Now add enough more bits to support the resolution of a single pixel.
+  bits += log2(MIN(width_pixels, height_pixels));
+  // Now add enough more bits to support subsampling.
+  bits += subsample_max_depth;
+  // Now add a few guard bits.  12 is a bare minimum which just barely is
+  // sufficient.  16 is a better value.
+  bits += 16;
+  // Finally, round up and use this as the required precision.
+  int mp_prec = ceil(bits);
+  fprintf(stderr, "precision required:  %d bits\n", mp_prec);
+  
+#if 0
+  int mp_prec = mp_get_prec(xy_min_size);  // KLUDGE for now
   mp_prec += ceil(log2(MAX(width_pixels, height_pixels)));
   mp_prec += ceil((real)subsample_max_depth / 2);
   fprintf(stderr, "precision required:  %d bits\n", mp_prec);
   mp_prec = MAX(mp_prec, 64);
-  mp_prec = 64;
+  //mp_prec = 64;
   fprintf(stderr, "precision using:  %d bits\n", mp_prec);
+#endif
 
   mp_init2(this->x_center, mp_prec); mp_init2(this->y_center, mp_prec);
   mp_init2(this->x_size,   mp_prec); mp_init2(this->y_size,   mp_prec);
@@ -204,6 +231,11 @@ Pixel image_compute_pixel(Image *this, real i, real j)
   mp_clear(y);
   mp_clear(x);
 
+  // Output progress (for debugging).
+  if (false) //if (this->show_progress)
+    fprintf(stderr, "i=%7.2f  j=%7.2f  iter=%9llu\n",
+                    (double)i, (double)j, pixel.mr.iter);
+
   // Map iterations to color.
   pixel.color = palette_color_from_mandelbrot_result(this->palette, pixel.mr);
 
@@ -310,37 +342,40 @@ Pixel image_compute_subsampled_pixel(Image *this,
         pixel.color);
   }
 
+  pixel.subsampled = true;   // Subsampling accomplished for this pixel.
+  pixel.subsample  = false;  // Subsampling no longer required for this pixel.
+
   return pixel;
 }
 
 
 //-----------------------------------------------------------------------------
-// REPOPULATE PIXEL
+// REFINE PIXEL
 
 private_method
-void image_repopulate_pixel(Image *this, int i, int j)
+void image_refine_pixel(Image *this, int i, int j)
 {
   assert(this);
   assert(i >= 0); assert(i < this->di);  // *Not* this->_di here.
   assert(j >= 0); assert(j < this->dj);  // *Not* this->_dj here.
 
-  float32 solidarity = linear_rgb_solidarity4(
-    this->pixels[i+0][j+0].color,
-    this->pixels[i+0][j+1].color,
-    this->pixels[i+1][j+0].color,
-    this->pixels[i+1][j+1].color
-  );
+  // Set new pixel value.
+  LinearRGB old_color = this->pixels[i][j].color;
+  this->pixels[i][j] = image_compute_subsampled_pixel(
+    this, i, j, 1, 1,
+    this->pixels[i+0][j+0],
+    1);
+  LinearRGB new_color = this->pixels[i][j].color;
 
-  if (solidarity < this->subsample_solidarity)
+  // If the color change was significant, then mark the pixel's eight neighbors
+  // as also now needing refinement.
+  if (linear_rgb_solidarity2(old_color, new_color) < this->subsample_solidarity)
   {
-    this->pixels[i][j] = image_compute_subsampled_pixel(
-      this, i, j, 1, 1,
-      this->pixels[i+0][j+0],
-      1);
-  }
-  else
-  {
-    //this->pixels[i][j].color = (LinearRGB) { .r = .0, .g = .0, .b = .0 };
+    int i0 = MAX(i-1, 0), i1 = MIN(i+1, this->di-1);
+    int j0 = MAX(j-1, 0), j1 = MIN(j+1, this->dj-1);
+    for (i = i0; i <= i1; i++)
+    for (j = j0; j <= j1; j++)
+      this->pixels[i][j].subsample = true;
   }
 }
 
@@ -364,14 +399,14 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
   //
   // TODO:  Reimplement this with early-out as soon as it's known that filling
   // is not going to happen.  This will result in smaller regions sooner, which
-  // will greatly help cache coherency.
+  // will greatly help cache coherency in large images.
 
   bool fill_block = true;
   int i1 = i0 + di - 1;
   int j1 = j0 + dj - 1;
   if (true)  // Top edge
   {
-    for (int j = j0; j <= j1; j++)
+    for (int j = j0; fill_block && (j <= j1); j++)
     {
       image_populate_pixel(this, i0, j);
       fill_block &= pixel_is_interior(this->pixels[i0][j]);
@@ -379,7 +414,7 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
   }
   if (di > 1)  // Bottom edge
   {
-    for (int j = j0; j <= j1; j++)
+    for (int j = j0; fill_block && (j <= j1); j++)
     {
       image_populate_pixel(this, i1, j);
       fill_block &= pixel_is_interior(this->pixels[i1][j]);
@@ -387,7 +422,7 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
   }
   if (true)  // Left edge
   {
-    for (int i = i0 + 1; i <= i1 - 1; i++)
+    for (int i = i0 + 1; fill_block && (i <= i1 - 1); i++)
     {
       image_populate_pixel(this, i, j0);
       fill_block &= pixel_is_interior(this->pixels[i][j0]);
@@ -395,7 +430,7 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
   }
   if (dj > 1)  // Right edge
   {
-    for (int i = i0 + 1; i <= i1 - 1; i++)
+    for (int i = i0 + 1; fill_block && (i <= i1 - 1); i++)
     {
       image_populate_pixel(this, i, j1);
       fill_block &= pixel_is_interior(this->pixels[i][j1]);
@@ -447,6 +482,17 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
       image_populate_block(this, i0, j0 + half_dj, di, dj - half_dj    );
     }
   }
+  else if ((di <= 2) || (dj <= 2))
+  {
+    for (int i = i0; i <= i1; i++)
+    for (int j = j0; j <= j1; j++)
+      image_populate_pixel(this, i, j);
+  }
+  else
+  {
+    fprintf(stderr, "i0=%d, j0=%d, di=%d, dj=%d\n", i0, j0, di, dj);
+    assert(false);
+  }
 }
 
 
@@ -474,32 +520,64 @@ void image_populate(Image *this)
   if (!subsampling)
     return;
 
-  // Go back and subsample pixels whose rightward and downward neighbors are
-  // significantly different in color.  (The "+1"s in the indexes here are safe
-  // because the image is padded by one row and column at the bottom and right
-  // edges.)
+  // Go back and mark pixels for subsampling whose rightward and downward
+  // neighbors are significantly different in color.  (The "+1"s in the indexes
+  // here are safe because the image is padded by one row and column at the
+  // bottom and right edges.)
   for (int i = 0; i < this->di; i++)
   for (int j = 0; j < this->dj; j++)
   {
-    image_repopulate_pixel(this, i, j);
+    float32 solidarity = linear_rgb_solidarity4(
+      this->pixels[i+0][j+0].color,
+      this->pixels[i+0][j+1].color,
+      this->pixels[i+1][j+0].color,
+      this->pixels[i+1][j+1].color
+    );
 
-#if 0  // OBSOLETE
     if (solidarity < this->subsample_solidarity)
     {
-      image_repopulate_pixel(this, i, j);
-
-      LinearRGB color = linear_rgb_average4(
-        this->pixels[i+0][j+0].color,
-        this->pixels[i+0][j+1].color,
-        this->pixels[i+1][j+0].color,
-        this->pixels[i+1][j+1].color
-      );
-
-      this->pixels[i][j].color = linear_rgb_lerp(solidarity,
-        palette_undefined_color(this->palette), color);
+      this->pixels[i][j].subsample = true;
     }
-#endif
   }
+
+  // Now, refine pixels until the entire image is refined.
+  bool subsampled;
+  do
+  {
+    subsampled = false;
+    for (int i = 0; i < this->di; i++)
+    for (int j = 0; j < this->dj; j++)
+    {
+      if (this->pixels[i][j].subsample)
+      {
+        if (this->pixels[i][j].subsampled)
+        {
+          this->pixels[i][j].subsample = false;  // Ignore; already done.
+        }
+        else
+        {
+          image_refine_pixel(this, i, j);
+          subsampled = true;
+        }
+      }
+    }
+  }
+  while (subsampled);
+
+  // Finally, for testing, set to gray any pixels that did not require
+  // refinement.
+#if 0
+  for (int i = 0; i < this->di; i++)
+  for (int j = 0; j < this->dj; j++)
+  {
+    if (!this->pixels[i][j].subsampled)
+    {
+      this->pixels[i][j].color.r = 0.5;
+      this->pixels[i][j].color.g = 0.5;
+      this->pixels[i][j].color.b = 0.5;
+    }
+  }
+#endif
 }
 
 
@@ -592,6 +670,26 @@ void image_print_clean_real(real value)
   fprintf("%s", buf);
 }
 #endif
+
+
+//-----------------------------------------------------------------------------
+// COMPUTE RATIO
+
+private_method
+float64 ratio(uint64 numerator, uint64 denominator)
+{
+  return (float64)numerator / (float64)(denominator? denominator : 1);
+}
+
+
+//-----------------------------------------------------------------------------
+// COMPUTE PERCENTAGE
+
+private_function
+float64 percentage(uint64 numerator, uint64 denominator)
+{
+  return ratio(numerator, denominator) * 100;
+}
 
 
 //-----------------------------------------------------------------------------
@@ -711,28 +809,28 @@ void image_output_statistics(Image *this, FILE *stream)
 
   fprintf(stream, "      Subsampling min depth:  %d\n", this->subsample_min_depth);
   fprintf(stream, "      Subsampling max depth:  %d\n", this->subsample_max_depth);
-  fprintf(stream, "     Subsampling solidarity:  %f\n", this->subsample_solidarity);
+  fprintf(stream, "     Subsampling solidarity:  %f\n", (double)this->subsample_solidarity);
   fprintf(stream, "\n");
 
   fprintf(stream, "               Total pixels: %20llu\n", total_pixels);
   fprintf(stream, "      Total interior pixels: %20llu (%.1f%%)\n", total_interior_pixels,
-          (double)total_interior_pixels / (double)total_pixels * 100);
+          percentage(total_interior_pixels, total_pixels));
   fprintf(stream, "      Total exterior pixels: %20llu (%.1f%%)\n", total_exterior_pixels,
-          (double)total_exterior_pixels / (double)total_pixels * 100);
+          percentage(total_exterior_pixels, total_pixels));
   fprintf(stream, "\n");
   fprintf(stream, "           Total iterations: %20llu\n", total_iter);
   fprintf(stream, "  Total interior iterations: %20llu (%.1f%%)\n", total_interior_iter,
-          (double)total_interior_iter / (double)total_iter * 100);
+          percentage(total_interior_iter, total_iter));
   fprintf(stream, "  Total exterior iterations: %20llu (%.1f%%)\n", total_exterior_iter,
-          (double)total_exterior_iter / (double)total_iter * 100);
+          percentage(total_exterior_iter, total_iter));
   fprintf(stream, "\n");
 
   fprintf(stream, "         Average iterations: %20.3f\n",
-          (double)total_iter / (double)total_pixels);
+          ratio(total_iter, total_pixels));
   fprintf(stream, "Average interior iterations: %20.3f\n",
-          (double)total_interior_iter / (double)total_interior_pixels);
+          ratio(total_interior_iter, total_interior_pixels));
   fprintf(stream, "Average exterior iterations: %20.3f\n",
-          (double)total_exterior_iter / (double)total_exterior_pixels);
+          ratio(total_exterior_iter, total_exterior_pixels));
   fprintf(stream, "\n");
 
 
@@ -753,24 +851,24 @@ void image_output_statistics(Image *this, FILE *stream)
   fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     interior_tally_uniterated,
-    (double)interior_tally_uniterated / (double)total_interior_pixels * 100,
-    (double)interior_tally_log2_running_total / (double)total_interior_pixels * 100);
+    percentage(interior_tally_uniterated, total_interior_pixels),
+    percentage(interior_tally_log2_running_total, total_interior_pixels));
   for (int k = 0; k <= max_interior_k; k++)
   {
     interior_tally_log2_running_total += interior_tally_log2[k];
     fprintf(stream, "%25llu  %20llu  %9.6f%% %10.6f%%\n",
       UINT64_C(1) << k,
       interior_tally_log2[k],
-      (double)interior_tally_log2[k] / (double)total_interior_pixels * 100,
-      (double)interior_tally_log2_running_total / (double)total_interior_pixels * 100);
+      percentage(interior_tally_log2[k], total_interior_pixels),
+      percentage(interior_tally_log2_running_total, total_interior_pixels));
   }
   interior_tally_log2_running_total += interior_tally_aperiodic;
   sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
   fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     interior_tally_aperiodic,
-    (double)interior_tally_aperiodic / (double)total_interior_pixels * 100,
-    (double)interior_tally_log2_running_total / (double)total_interior_pixels * 100);
+    percentage(interior_tally_aperiodic, total_interior_pixels),
+    percentage(interior_tally_log2_running_total, total_interior_pixels));
   fprintf(stream, "\n");
 
   // Print escaped-point table.
@@ -787,24 +885,24 @@ void image_output_statistics(Image *this, FILE *stream)
   fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     exterior_tally_uniterated,
-    (double)exterior_tally_uniterated / (double)total_exterior_pixels * 100,
-    (double)exterior_tally_log2_running_total / (double)total_exterior_pixels * 100);
+    percentage(exterior_tally_uniterated, total_exterior_pixels),
+    percentage(exterior_tally_log2_running_total, total_exterior_pixels));
   for (int k = 0; k <= max_exterior_k; k++)
   {
     exterior_tally_log2_running_total += exterior_tally_log2[k];
     fprintf(stream, "%25llu  %20llu  %9.6f%% %10.6f%%\n",
       UINT64_C(1) << k,
       exterior_tally_log2[k],
-      (double)exterior_tally_log2[k] / (double)total_exterior_pixels * 100,
-      (double)exterior_tally_log2_running_total / (double)total_exterior_pixels * 100);
+      percentage(exterior_tally_log2[k], total_exterior_pixels),
+      percentage(exterior_tally_log2_running_total, total_exterior_pixels));
   }
   exterior_tally_log2_running_total += exterior_tally_aperiodic;
   sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
   fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     exterior_tally_aperiodic,
-    (double)exterior_tally_aperiodic / (double)total_exterior_pixels * 100,
-    (double)exterior_tally_log2_running_total / (double)total_exterior_pixels * 100);
+      percentage(exterior_tally_aperiodic, total_exterior_pixels),
+      percentage(exterior_tally_log2_running_total, total_exterior_pixels));
 }
 
 

@@ -90,6 +90,13 @@ private_static const real LOG_BAILOUT_RADIUS      = 2.77258872223978;
 // estimate based on (2^2)^2 = 16.
 private_static const real BAILOUT_DWELL_OVERHEAD  = 2.0;
 
+public_function
+real mandelbrot_max_scalar_value_during_iteration()
+{
+  //return BAILOUT_RADIUS_SQUARED + 2.0;
+  return 6.0;
+}
+
 
 //-----------------------------------------------------------------------------
 // ALLOCATE
@@ -100,7 +107,8 @@ Mandelbrot *mandelbrot_create(uint64 iter_max,
                               mp_real periodicity_epsilon)
 {
   assert(iter_max > 0);
-  assert(mp_prec >= 64);
+  assert(mp_prec >= 16);
+  //assert(mp_prec >= 64);
   assert(mp_prec >= mp_get_prec(periodicity_epsilon));
   assert(mp_sgn(periodicity_epsilon) >= 0);
 
@@ -723,7 +731,7 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
 public_method
 MandelbrotResult mandelbrot_compute(Mandelbrot *this, mp_real cx, mp_real cy)
 {
-  if (true) //this->precision_bits <= 64)
+  if (this->mp_prec <= REAL_MANTISSA)
   {
     return mandelbrot_compute_low_precision(
              mp_get_d(cx, MP_ROUND),

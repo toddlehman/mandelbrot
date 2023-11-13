@@ -33,6 +33,7 @@ ALL_SRC =	$(H_FILES) \
 		mset_image \
 		mset_zoom_make \
 		mset_queue_runner \
+		mset_blend_frames \
 		Makefile
 
 SNAPSHOT =	snapshot.tar.gz

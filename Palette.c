@@ -13,7 +13,11 @@ Palette *palette_create(void)
 {
   Palette *this = mem_alloc_clear(1, sizeof(*this));
 
+#if 1
   this->exterior_count = 8;
+#else
+  this->exterior_count = 8;
+#endif
 
   this->exterior_locations = mem_alloc_clear(this->exterior_count + 1,
     sizeof(*(this->exterior_locations)));
@@ -25,6 +29,7 @@ Palette *palette_create(void)
     this->exterior_locations[i] = (real)i / (real)this->exterior_count;
 
   int i = 0;
+#if 1
   this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.145, 0.855 };  // Blue
 //this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.597, 0.603 };  // Teal
   this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.682, 0.018 };  // Green
@@ -35,6 +40,16 @@ Palette *palette_create(void)
   this->exterior_colors[i++] = (LinearRGB) { 0.655, 0.000, 0.245 };  // Mauve
   this->exterior_colors[i++] = (LinearRGB) { 0.462, 0.000, 0.538 };  // Purple
   this->exterior_colors[i++] = (LinearRGB) { 0.147, 0.000, 0.853 };  // Indigo
+#else
+  this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.000, 1.000 };  // Blue
+  this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.700, 0.000 };  // Green
+  this->exterior_colors[i++] = (LinearRGB) { 1.000, 1.000, 0.000 };  // Yellow
+  this->exterior_colors[i++] = (LinearRGB) { 1.000, 0.500, 0.000 };  // Orange
+  this->exterior_colors[i++] = (LinearRGB) { 1.000, 0.000, 0.000 };  // Red
+  this->exterior_colors[i++] = (LinearRGB) { 1.000, 0.000, 0.333 };  // Mauve
+  this->exterior_colors[i++] = (LinearRGB) { 0.666, 0.000, 0.666 };  // Purple
+  this->exterior_colors[i++] = (LinearRGB) { 0.333, 0.000, 1.000 };  // Indigo
+#endif
   assert(i == this->exterior_count);
   this->exterior_colors[i] = this->exterior_colors[0];
   this->exterior_locations[i] = 1.0;
@@ -89,10 +104,22 @@ private_method
 LinearRGB palette_compute_color(Palette *this, real location)
 {
   assert(this);
-  assert((location >= 0) && (location <= 1));
+  //assert((location >= 0) && (location <= 1));
 
-       if (location < 0) location = 0;
-  else if (location > 1) location = 1;
+  //     if (location < 0) location = 0;
+  //else if (location > 1) location = 1;
+
+  if (location > 1) location -= floor(location);
+
+  if (location < 0)
+  {
+    if (location < -1) location = -1;
+    location += 1;
+    location = swerp(location, 0, 1);
+    return linear_rgb_lerp(location,
+                           (LinearRGB) { 0, 0, 0 },
+                           this->exterior_colors[0]); 
+  }
 
   for (int i = 0; i < this->exterior_count; i++)
   {
@@ -129,9 +156,13 @@ real palette_map_dwell_to_color_location(Palette *this, float64 dwell)
 
   #elif 1
 
-    if (f < 0) f = 0;
-    assert(f >= 0);
-    if (f < 200)
+    //if (f < 0) f = 0;
+    //assert(f >= 0);
+    if (f < 0)
+    {
+      ;
+    }
+    else if (f < 200)
     {
       f = f / 200;
     }

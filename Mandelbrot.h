@@ -160,6 +160,9 @@ MandelbrotResult mandelbrot_result_exterior(const uint64 iter,
 //-----------------------------------------------------------------------------
 // FUNCTION PROTOTYPES
 
+extern_public_function
+  real mandelbrot_max_scalar_value_during_iteration();
+
 extern_public_constructor
   Mandelbrot *mandelbrot_create(uint64 iter_max,
                                 int mp_prec,

@@ -98,10 +98,16 @@ typedef  uint64_t  uint64;
 //-----------------------------------------------------------------------------
 // BASIC FLOATING-POINT TYPES
 
-typedef  double  real;
+typedef  float        float32;
+typedef  double       float64;
+typedef  long double  float80;
+typedef  float80      real;
 
-typedef  float   float32;
-typedef  double  float64;
+#define  FLOAT32_MANTISSA  23
+#define  FLOAT64_MANTISSA  52
+#define  FLOAT80_MANTISSA  68
+
+#define  REAL_MANTISSA     FLOAT80_MANTISSA
 
 
 //-----------------------------------------------------------------------------

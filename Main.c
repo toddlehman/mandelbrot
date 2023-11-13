@@ -100,6 +100,7 @@ int main (int arg_count, char *args[])
     char *str_subsample_solidarity  = args[arg_index+7];
 
     // Calculate minimum precision needed to represent values.
+  #if 0
     int mp_prec = 0;
     mp_prec = MAX(mp_prec, 16 + mp_get_min_prec_from_string(str_x_center));
     mp_prec = MAX(mp_prec, 16 + mp_get_min_prec_from_string(str_y_center));
@@ -109,6 +110,12 @@ int main (int arg_count, char *args[])
     mp_init2(x_center, mp_prec);
     mp_init2(y_center, mp_prec);
     mp_init2(xy_min_size, mp_prec);
+  #else
+    mp_real x_center, y_center, xy_min_size;
+    mp_init2(x_center, mp_get_min_prec_from_string(str_x_center));
+    mp_init2(y_center, mp_get_min_prec_from_string(str_y_center));
+    mp_init2(xy_min_size, mp_get_min_prec_from_string(str_xy_min_size));
+  #endif
 
     mp_set_str(x_center, str_x_center, 10, MP_ROUND);
     mp_set_str(y_center, str_y_center, 10, MP_ROUND);
