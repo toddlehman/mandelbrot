@@ -82,6 +82,8 @@
 //-----------------------------------------------------------------------------
 // BASIC INTEGER TYPES
 
+typedef  unsigned int  uint;
+
 typedef  uint8_t   byte;
 
 typedef  int8_t    int8;

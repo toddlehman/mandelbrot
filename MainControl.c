@@ -9,8 +9,16 @@
 
 -----------------------------------------------------------------------------*/
 
-#import "MainControl.h"
+#import "Common.h"
+#import "Memory.h"
+#import "DeepReal.h"
+#import "MPReal.h"
+#import "RGB.h"
+#import "Palette.h"
+#import "Mandelbrot.h"
+#import "Pixel.h"
 #import "Image.h"
+#import "MainControl.h"
 
 
 //-----------------------------------------------------------------------------
@@ -181,15 +189,15 @@ bool process_argument(MainControl *this, const char *str)
     mp_clear(this->xy_min_size);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->xy_min_size);
   }
-  else if ((value = argument_matches(key, "roll=")))
+  else if ((value = argument_matches(key, "ar=")))
   {
     valid = fetch_real_value(value, &this->roll);
   }
-  else if ((value = argument_matches(key, "pitch=")))
+  else if ((value = argument_matches(key, "ap=")))
   {
     valid = fetch_real_value(value, &this->pitch);
   }
-  else if ((value = argument_matches(key, "yaw=")))
+  else if ((value = argument_matches(key, "ay=")))
   {
     valid = fetch_real_value(value, &this->yaw);
   }
@@ -205,17 +213,27 @@ bool process_argument(MainControl *this, const char *str)
   {
     valid = fetch_int_value(value, &this->height_pixels);
   }
-  else if ((value = argument_matches(key, "ssmin=")))
+  else if ((value = argument_matches(key, "ssimin=")))
   {
-    valid = fetch_int_value(value, &this->supersample_min_depth);
+    valid = fetch_int_value(value, &this->supersample_int_min_depth);
   }
-  else if ((value = argument_matches(key, "ssmax=")))
+  else if ((value = argument_matches(key, "ssimax=")))
   {
-    valid = fetch_int_value(value, &this->supersample_max_depth);
+    valid = fetch_int_value(value, &this->supersample_int_max_depth);
+  }
+  else if ((value = argument_matches(key, "ssemin=")))
+  {
+    valid = fetch_int_value(value, &this->supersample_ext_min_depth);
+  }
+  else if ((value = argument_matches(key, "ssemax=")))
+  {
+    valid = fetch_int_value(value, &this->supersample_ext_max_depth);
   }
   else if ((value = argument_matches(key, "sss=")))
   {
-    valid = fetch_real_value(value, &this->supersample_solidarity);
+    real supersample_solidarity;
+    valid = fetch_real_value(value, &supersample_solidarity);
+    this->supersample_solidarity = (float32)supersample_solidarity;
   }
   else if ((value = argument_matches(key, "-s")))
   {
@@ -229,6 +247,30 @@ bool process_argument(MainControl *this, const char *str)
   }
 
   return valid;
+}
+
+
+//-----------------------------------------------------------------------------
+// PRINT STRUCTURE SIZES FOR DEBUGGING
+
+void print_struct_sizes(void)
+{
+  #define PRINT_STRUCT_SIZE(x) \
+    fprintf(stderr, "sizeof(%s) = %d\n", #x, (int)sizeof(x));
+
+  PRINT_STRUCT_SIZE(mp_real);
+  PRINT_STRUCT_SIZE(DeepReal);
+  PRINT_STRUCT_SIZE(LinearRGB);
+  PRINT_STRUCT_SIZE(DeviceRGB48);
+  PRINT_STRUCT_SIZE(DeviceRGB24);
+  PRINT_STRUCT_SIZE(Palette);
+  PRINT_STRUCT_SIZE(Mandelbrot);
+  PRINT_STRUCT_SIZE(MandelbrotResult);
+  PRINT_STRUCT_SIZE(Pixel);
+  PRINT_STRUCT_SIZE(Image);
+  PRINT_STRUCT_SIZE(MainControl);
+
+  #undef PRINT_STRUCT_SIZE
 }
 
 
@@ -251,10 +293,12 @@ int main (int arg_count, const char *args[])
   this->pitch = 0.0;
   this->yaw   = 0.0;
   this->iter_max = 10000;
-  this->width_pixels = 512;
-  this->height_pixels = 512;
-  this->supersample_min_depth = 0;
-  this->supersample_max_depth = 0;
+  this->width_pixels = 8;
+  this->height_pixels = 8;
+  this->supersample_int_min_depth = 0;
+  this->supersample_int_max_depth = 0;
+  this->supersample_ext_min_depth = 0;
+  this->supersample_ext_max_depth = 0;
   this->supersample_solidarity = 0;
   this->output_statistics = false;
   this->output_image_text_format = isatty(fileno(stdout));
@@ -263,11 +307,21 @@ int main (int arg_count, const char *args[])
   for (int arg_index = 1; arg_index < arg_count; arg_index++)
   {
     const char *arg = args[arg_index];
-    if (!(valid &= process_argument(this, arg)))
+    if (!process_argument(this, arg))
+    {
+      valid = false;
       fprintf(stderr, "%s: Invalid argument\n", arg);
+    }
   }
   if (!valid)
     usage_exit(args[0]);
+
+  if (!(this->supersample_int_min_depth <= this->supersample_int_max_depth))
+    error_exit("Supersampling interior minimum depth must be "
+               "less than or equal to maximum depth.");
+  if (!(this->supersample_ext_min_depth <= this->supersample_ext_max_depth))
+    error_exit("Supersampling exterior minimum depth must be "
+               "less than or equal to maximum depth.");
 
   if (this->output_statistics)
   {
@@ -284,8 +338,10 @@ int main (int arg_count, const char *args[])
     this->xy_min_size,
     this->width_pixels,
     this->height_pixels,
-    this->supersample_min_depth,
-    this->supersample_max_depth,
+    this->supersample_int_min_depth,
+    this->supersample_int_max_depth,
+    this->supersample_ext_min_depth,
+    this->supersample_ext_max_depth,
     this->supersample_solidarity,
     this->iter_max);
 

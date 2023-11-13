@@ -22,22 +22,6 @@ LinearRGB;     // (12 bytes)
 
 
 //-----------------------------------------------------------------------------
-// DEVICE 24-BIT RGB STRUCTURE
-
-#pragma pack(push, 1)
-
-typedef struct
-{
-  uint8  r;   // Red   color component, where 0 <= r <= 255.  (1 byte)
-  uint8  g;   // Green color component, where 0 <= g <= 255.  (1 byte)
-  uint8  b;   // Blue  color component, where 0 <= b <= 255.  (1 byte)
-}
-DeviceRGB24;  // (3 bytes)
-
-#pragma pack(pop)
-
-
-//-----------------------------------------------------------------------------
 // DEVICE 48-BIT RGB STRUCTURE
 
 #pragma pack(push, 2)
@@ -49,6 +33,22 @@ typedef struct
   uint16  b;  // Blue  color component, where 0 <= b <= 65535.  (2 bytes)
 }
 DeviceRGB48;  // (6 bytes)
+
+#pragma pack(pop)
+
+
+//-----------------------------------------------------------------------------
+// DEVICE 24-BIT RGB STRUCTURE
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+  uint8  r;   // Red   color component, where 0 <= r <= 255.  (1 byte)
+  uint8  g;   // Green color component, where 0 <= g <= 255.  (1 byte)
+  uint8  b;   // Blue  color component, where 0 <= b <= 255.  (1 byte)
+}
+DeviceRGB24;  // (3 bytes)
 
 #pragma pack(pop)
 

@@ -9,10 +9,14 @@
 
 
 //-----------------------------------------------------------------------------
+#pragma pack(push, 8)
+
 typedef struct
 {
   Pixel    *_pixels;
   Pixel    **pixels;
+
+  Pixel    interior_filler_pixel;
 
   Palette  *palette;
 
@@ -29,15 +33,20 @@ typedef struct
   mp_real  pixel_size;
   mp_real  periodicity_epsilon;
 
-  int      supersample_min_depth;
-  int      supersample_max_depth;
-  real     supersample_solidarity;
+  bool     supersample;
+  int      supersample_int_min_depth;
+  int      supersample_int_max_depth;
+  int      supersample_ext_min_depth;
+  int      supersample_ext_max_depth;
+  float32  supersample_solidarity;
 
   uint64   iter_max;
 
   Mandelbrot  *mandelbrot;
 }
 Image;
+
+#pragma pack(pop)
 
 
 //-----------------------------------------------------------------------------
@@ -46,8 +55,11 @@ Image;
 extern_public_constructor
   Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
                       int pixel_width, int pixel_height,
-                      int supersample_min_depth, int supersample_max_depth,
-                      real supersample_solidarity,
+                      int supersample_int_min_depth,
+                      int supersample_int_max_depth,
+                      int supersample_ext_min_depth,
+                      int supersample_ext_max_depth,
+                      float32 supersample_solidarity,
                       uint64 iter_max);
 
 extern_public_destructor

@@ -8,6 +8,8 @@
 //-----------------------------------------------------------------------------
 // FIXED-POINT REAL NUMBER STRUCTURE
 
+#pragma pack(push, 4)
+
 typedef struct
 {
   bool    s;      // Sign bit (0 = positive, 1 = negative).
@@ -15,6 +17,8 @@ typedef struct
   uint32  v[0];   // 32-bit values comprising the number.
 }
 DeepReal;
+
+#pragma pack(pop)
 
 
 //-----------------------------------------------------------------------------

@@ -27,9 +27,9 @@ Mandelbrot;
 
 typedef struct
 {
-  float64  dwell;    // Mandelbrot "dwell" value (8 bytes)
-  uint64   iter;     // Number of iterations computed (8 bytes)
-  uint64   period;   // Period of orbit, if detected (8 bytes)
+  float64  dwell;    // Mandelbrot "dwell" value.  (8 bytes)
+  uint64   iter;     // Number of iterations computed.  (8 bytes)
+  uint64   period;   // Period of orbit, if detected.  (8 bytes)
 }
 MandelbrotResult;    // (24 bytes)
 

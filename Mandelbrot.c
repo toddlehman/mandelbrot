@@ -77,23 +77,23 @@
 
 
 //-----------------------------------------------------------------------------
-// BAILOUT PARAMETERS
+// ESCAPE/BAILOUT PARAMETERS
 
-// A bailout radius of 4 is ok, but 16 is much better for smooth coloring.
-private_static const real BAILOUT_RADIUS          = 16.0;
-private_static const real BAILOUT_RADIUS_SQUARED  = 256.0;
-private_static const real LOG_BAILOUT_RADIUS      = 2.77258872223978;
+// An escape radius of 4 is ok, but 16 is much better for smooth coloring.
+private_static const real ESCAPE_RADIUS          = 16.0;
+private_static const real ESCAPE_RADIUS_SQUARED  = 256.0;
+private_static const real LOG2_ESCAPE_RADIUS     = 2.77258872223978;
 
 // This adjusts the dwell value downward from the iteration value, because
 // the dwell is supposed to be the number of iterations required to escape a
 // radius of 2.  Note that this adjustment is not precise and is only a rough
 // estimate based on (2^2)^2 = 16.
-private_static const real BAILOUT_DWELL_OVERHEAD  = 2.0;
+private_static const real ESCAPE_DWELL_OVERHEAD  = 2.0;
 
 public_function
 real mandelbrot_max_scalar_value_during_iteration()
 {
-  //return BAILOUT_RADIUS_SQUARED + 2.0;
+  //return ESCAPE_RADIUS_SQUARED + 2.0;
   return 6.0;
 }
 
@@ -152,9 +152,9 @@ float64 dwell(uint64 iter, real z2)
   // (-.75,0),5 it produces fractional iterations in the range
   // -0.031193 to 0.971226, which has a width of 1.002188.
   // <http://en.wikipedia.org/wiki/Mandelbrot_set#Continuous_.28smooth.29_coloring>
-  float64 fractional_iter = 1.5 - log2(log2(sqrt(z2)) / LOG_BAILOUT_RADIUS);
+  float64 fractional_iter = 1.5 - log2(log2(sqrt(z2)) / LOG2_ESCAPE_RADIUS);
 
-  return iter + fractional_iter - BAILOUT_DWELL_OVERHEAD;
+  return iter + fractional_iter - ESCAPE_DWELL_OVERHEAD;
 }
 
 
@@ -296,7 +296,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon_old(
   assert(epsilon > 0);
   assert(i_max > 0);
 
-  const real r2 = BAILOUT_RADIUS_SQUARED;
+  const real r2 = ESCAPE_RADIUS_SQUARED;
 
   real x = cx, y = cy, x_base = 1e99, y_base = 1e99;
 
@@ -337,7 +337,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
   assert(epsilon > 0);
   assert(i_max > 0);
 
-  const real r2 = BAILOUT_RADIUS_SQUARED;
+  const real r2 = ESCAPE_RADIUS_SQUARED;
 
   real x = cx, y = cy, x_base = 1e99, y_base = 1e99;
 
@@ -365,13 +365,13 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
     #undef   ITERATE
     #undef   CHECK
 
-    if ((z2 = x2 + y2) > 4)  // Use minimal bailout radius here.
+    if ((z2 = x2 + y2) > 4)  // Use minimal escape radius here.
     {
       x = save_x; y = save_y; i -= UNROLL;
       while (i < i_max)
       {
         x2 = x * x; y2 = y * y;
-        if ((z2 = x2 + y2) > r2)  // Use custom bailout radius here.
+        if ((z2 = x2 + y2) > r2)  // Use custom escape radius here.
           return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
         y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
       }
@@ -401,7 +401,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact_old(
 {
   assert(i_max > 0);
 
-  const real r2 = BAILOUT_RADIUS_SQUARED;
+  const real r2 = ESCAPE_RADIUS_SQUARED;
 
   real x = cx, y = cy, x_base = 1e99, y_base = 1e99;
 
@@ -441,7 +441,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
 {
   assert(i_max > 0);
 
-  const real r2 = BAILOUT_RADIUS_SQUARED;
+  const real r2 = ESCAPE_RADIUS_SQUARED;
 
   real x = cx, y = cy, x_base = 1e99, y_base = 1e99;
 
@@ -468,13 +468,13 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
     #undef   ITERATE
     #undef   CHECK
 
-    if ((z2 = x2 + y2) > 4)  // Use minimal bailout radius here.
+    if ((z2 = x2 + y2) > 4)  // Use minimal escape radius here.
     {
       x = save_x; y = save_y; i -= UNROLL;
       while (i < i_max)
       {
         x2 = x * x; y2 = y * y;
-        if ((z2 = x2 + y2) > r2)  // Use custom bailout radius here.
+        if ((z2 = x2 + y2) > r2)  // Use custom escape radius here.
           return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
         y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
       }
@@ -504,7 +504,7 @@ MandelbrotResult mandelbrot_compute_low_precision_no_periodicity_old(
 {
   assert(i_max > 0);
 
-  const real r2 = BAILOUT_RADIUS_SQUARED;
+  const real r2 = ESCAPE_RADIUS_SQUARED;
 
   real x = cx, y = cy;
 
@@ -534,7 +534,7 @@ MandelbrotResult mandelbrot_compute_low_precision_no_periodicity(
 {
   assert(i_max > 0);
 
-  const real r2 = BAILOUT_RADIUS_SQUARED;
+  const real r2 = ESCAPE_RADIUS_SQUARED;
 
   real x = cx, y = cy;
 
@@ -553,14 +553,14 @@ MandelbrotResult mandelbrot_compute_low_precision_no_periodicity(
 
     #undef  ITERATE
 
-    if ((z2 = x2 + y2) > 4)  // Use minimal bailout radius here.
+    if ((z2 = x2 + y2) > 4)  // Use minimal escape radius here.
     {
       x = save_x; y = save_y; i -= UNROLL;
 
       while (i < i_max)
       {
         x2 = x * x; y2 = y * y;
-        if ((z2 = x2 + y2) > r2)  // Use custom bailout radius here.
+        if ((z2 = x2 + y2) > r2)  // Use custom escape radius here.
           return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
         y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
       }
@@ -578,6 +578,8 @@ MandelbrotResult mandelbrot_compute_low_precision(
                    const real periodicity_epsilon,
                    const uint64 iter_max)
 {
+  //#pragma message("Cardiod/disc test temporarily disabled.")
+  //#if 0  // TEMPORARILY DISABLED
   // Early-out test for membership in largest disc.
   if (cx <= -0.75)
   {
@@ -595,6 +597,7 @@ MandelbrotResult mandelbrot_compute_low_precision(
     if (x*x <= y)
       return mandelbrot_result_interior_uniterated();
   }
+  //#endif
 
   // Handle other cases with either periodicity checking or standard counting.
   if (periodicity_epsilon > 0)
@@ -635,7 +638,7 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
     mp_set_d(_p_0_0625, +0.0625, MP_ROUND);
 
     mp_init2(r2, mp_get_prec(epsilon));
-    mp_set_d(r2, BAILOUT_RADIUS_SQUARED, MP_ROUND);
+    mp_set_d(r2, ESCAPE_RADIUS_SQUARED, MP_ROUND);
 
     mp_init2(x,      mp_get_prec(epsilon));
     mp_init2(y,      mp_get_prec(epsilon));
