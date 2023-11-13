@@ -13,44 +13,112 @@ Palette *palette_create(void)
 {
   Palette *this = mem_alloc_clear(1, sizeof(*this));
 
-#if 1
-  this->exterior_count = 8;
-#else
-  this->exterior_count = 8;
-#endif
+  const int max_exterior_count = 20;
 
-  this->exterior_locations = mem_alloc_clear(this->exterior_count + 1,
+  this->exterior_locations = mem_alloc_clear(max_exterior_count + 1,
     sizeof(*(this->exterior_locations)));
 
-  this->exterior_colors = mem_alloc_clear(this->exterior_count + 1,
+  this->exterior_colors = mem_alloc_clear(max_exterior_count + 1,
     sizeof(*(this->exterior_colors)));
 
-  for (int i = 0; i < this->exterior_count; i++)
-    this->exterior_locations[i] = (real)i / (real)this->exterior_count;
-
   int i = 0;
-#if 1
+#if 0
+  // Simple, excellent monochrome palette showing lots and lots of detail.
+  // A bit boring, though, since there's no color.
+  this->exterior_locations[i] = 0.00;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.00, 0.00 };  // Black
+  this->exterior_locations[i] = 0.50;
+  this->exterior_colors[i++] = (LinearRGB) { 1.00, 1.00, 1.00 };  // White
+#elif 0
+  // Very nice, but too fiery.  I mean, it's really cool, but the fire gets
+  // tiring after a while.  Not enough variety in the photos.
+  this->exterior_locations[i] = 0.00;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.00, 0.00 };  // Black
+  this->exterior_locations[i] = 0.17;
+  this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
+  this->exterior_locations[i] = 0.33;
+  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
+  this->exterior_locations[i] = 0.50;
+  this->exterior_colors[i++] = (LinearRGB) { 1.00, 1.00, 1.00 };  // White
+  this->exterior_locations[i] = 0.67;
+  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
+  this->exterior_locations[i] = 0.83;
+  this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
+#elif 1
+  // Really great all-purpose palette.  Finely tuned.
+  this->exterior_locations[i] = 0.00;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.15, 0.85 };  // Blue
+  this->exterior_locations[i] = 0.10;
+  this->exterior_colors[i++] = (LinearRGB) { 0.30, 0.00, 0.40 };  // Purple
+  this->exterior_locations[i] = 0.20;
+  this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
+  this->exterior_locations[i] = 0.50;
+  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
+  this->exterior_locations[i] = 0.80;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.70, 0.02 };  // Green
+  this->exterior_locations[i] = 0.90;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.40, 0.60 };  // Teal
+#elif 1
+  // Great all-purpose palette.
+  this->exterior_locations[i] = 0.00;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.15, 0.85 };  // Blue
+  this->exterior_locations[i] = 0.14;
+  this->exterior_colors[i++] = (LinearRGB) { 0.30, 0.00, 0.80 };  // Purple
+  this->exterior_locations[i] = 0.28;
+  this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
+  this->exterior_locations[i] = 0.43;
+  this->exterior_colors[i++] = (LinearRGB) { 1.00, 0.25, 0.00 };  // Orange1
+  this->exterior_locations[i] = 0.57;
+  this->exterior_colors[i++] = (LinearRGB) { 1.00, 0.60, 0.00 };  // Orange2
+  this->exterior_locations[i] = 0.71;
+  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
+  this->exterior_locations[i] = 0.85;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.70, 0.02 };  // Green
+#elif 0
+  // Good all-purpose palette.  What I don't like about it, though, is that it
+  // doesn't follow a sunset color pattern (blue->purple->red->orange->yellow)
+  // and instead goes the other way (blue->green->yellow->orange->red->purple).
+  // Also, note that this hasn't been fine-tuned much.
+  this->exterior_locations[i] = 0.000;
   this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.145, 0.855 };  // Blue
-//this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.597, 0.603 };  // Teal
+  this->exterior_locations[i] = 0.125;
   this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.682, 0.018 };  // Green
-//this->exterior_colors[i++] = (LinearRGB) { 0.582, 1.000, 0.000 };  // Chartreuse
+  this->exterior_locations[i] = 0.250;
   this->exterior_colors[i++] = (LinearRGB) { 0.950, 0.812, 0.000 };  // Yellow
+  this->exterior_locations[i] = 0.375;
   this->exterior_colors[i++] = (LinearRGB) { 1.000, 0.348, 0.000 };  // Orange
+  this->exterior_locations[i] = 0.500;
   this->exterior_colors[i++] = (LinearRGB) { 0.900, 0.000, 0.000 };  // Red
+  this->exterior_locations[i] = 0.625;
   this->exterior_colors[i++] = (LinearRGB) { 0.655, 0.000, 0.245 };  // Mauve
+  this->exterior_locations[i] = 0.750;
   this->exterior_colors[i++] = (LinearRGB) { 0.462, 0.000, 0.538 };  // Purple
+  this->exterior_locations[i] = 0.825;
   this->exterior_colors[i++] = (LinearRGB) { 0.147, 0.000, 0.853 };  // Indigo
 #else
+  // Variation on the original.  It's nice, but it's too damn bright and neon.
+  this->exterior_locations[i] = 0.000;
   this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.000, 1.000 };  // Blue
+  this->exterior_locations[i] = 0.125;
   this->exterior_colors[i++] = (LinearRGB) { 0.000, 0.700, 0.000 };  // Green
+  this->exterior_locations[i] = 0.250;
   this->exterior_colors[i++] = (LinearRGB) { 1.000, 1.000, 0.000 };  // Yellow
+  this->exterior_locations[i] = 0.375;
   this->exterior_colors[i++] = (LinearRGB) { 1.000, 0.500, 0.000 };  // Orange
+  this->exterior_locations[i] = 0.500;
   this->exterior_colors[i++] = (LinearRGB) { 1.000, 0.000, 0.000 };  // Red
+  this->exterior_locations[i] = 0.625;
   this->exterior_colors[i++] = (LinearRGB) { 1.000, 0.000, 0.333 };  // Mauve
+  this->exterior_locations[i] = 0.750;
   this->exterior_colors[i++] = (LinearRGB) { 0.666, 0.000, 0.666 };  // Purple
+  this->exterior_locations[i] = 0.825;
   this->exterior_colors[i++] = (LinearRGB) { 0.333, 0.000, 1.000 };  // Indigo
 #endif
-  assert(i == this->exterior_count);
+  this->exterior_count = i;
+  assert(this->exterior_count < max_exterior_count);
+
+  //for (int i = 0; i < this->exterior_count; i++)
+  //  this->exterior_locations[i] = (real)i / (real)this->exterior_count;
   this->exterior_colors[i] = this->exterior_colors[0];
   this->exterior_locations[i] = 1.0;
 

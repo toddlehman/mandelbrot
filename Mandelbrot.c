@@ -632,11 +632,13 @@ MandelbrotResult mandelbrot_compute_low_precision(
   // in one case, before adding this test, I saw a region that chewed through
   // 7.89 trillion iterations (maximum iterations per probe was 1 billion).
   // After adding the test, the same image required only 18.3 million
-  // iterations.  Thus, this simple little early-out test speed things up by a
-  // factor of 430,000 in that particular case -- definitely well worth it.
-  else
+  // iterations.  Thus, this simple little early-out test was quite worth it.
+  // Generation of that image went from a whoppingly embarrassing 14.7 CPU
+  // hours down to 1.9 CPU seconds!  This is probably the single most useful
+  // optimization I have ever seen in my entire programming career.
+  else if (cx >= -2.0)
   {
-    if ((cy == 0) && (cx >= -2.0))  // It is already known that cx < -1.25.
+    if (cy == 0)  // Note: It is already known that cx < -1.25.
       return mandelbrot_result_interior_uniterated();
   }
 

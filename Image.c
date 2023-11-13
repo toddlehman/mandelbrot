@@ -38,6 +38,9 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   assert(supersample_solidarity <= 1);
   assert(iter_max > 0);
 
+  int supersample_max_depth = MAX(supersample_interior_max_depth,
+                                  supersample_exterior_max_depth);
+
   Image *this = mem_alloc_clear(1, sizeof(Image));
 
   // Calculate floating-point precision required.
@@ -120,7 +123,8 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   {
     mp_real periodicity_epsilon;
     mp_init2(periodicity_epsilon, mp_prec);
-    mp_div_d(periodicity_epsilon, this->pixel_size, 1e6, MP_ROUND);
+    mp_div_d(periodicity_epsilon, this->pixel_size,
+             pow(2, supersample_max_depth), MP_ROUND);
     this->mandelbrot = mandelbrot_create(iter_max, mp_prec,
                                          periodicity_epsilon);
     mp_clear(periodicity_epsilon);

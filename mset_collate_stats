@@ -1,0 +1,439 @@
+#!/usr/bin/perl -w
+#
+#  Standard input is a long catenated collection of stats output from the
+#  imager.
+#
+
+use strict;
+use bignum;
+
+
+sub log2 ($)
+{
+  my ($x) = @_;
+  return log($x) / log(2);
+}
+
+
+sub special_format_big_number ($)
+{
+  my ($n) = @_;
+
+  my @units = qw(ones thousand million billion trillion quadrillion
+                 quintrillion sextillion septillion octillion);
+
+  my $f = $n;
+  my $unit_index;
+  for ($unit_index = 0;
+       ($f >= 1000) && defined($units[$unit_index]);
+       $unit_index++, $f /= 1000)
+    {}
+
+  if (defined($units[$unit_index]))
+  {
+    return sprintf
+             $f >= 100? "%.0f %s":
+             $f >= 10?  "%.1f %s":
+             $f >= 1?   "%.2f %s":
+                        "%.0f %s",
+             $f,
+             $units[$unit_index];
+  }
+  else
+  {
+    return "???";
+  }
+}
+
+
+my $total_panels = 0;
+my $total_cpu_time = 0;
+my $total_pixels = 0;
+my $total_int_pixels = 0;
+my $total_ext_pixels = 0;
+my $total_subpixels = 0;
+my $total_int_subpixels = 0;
+my $total_ext_subpixels = 0;
+my $total_probes = 0;
+my $total_int_probes = 0;
+my $total_ext_probes = 0;
+my $total_iter = 0;
+my $total_int_iter = 0;
+my $total_ext_iter = 0;
+
+my $max_iter = undef;
+
+my $iter_buckets = {};
+
+my $subpixels_per_pixel = undef;
+my $pixels_per_panel = undef;
+my $panel_x_size = undef;
+my $panel_y_size = undef;
+
+my $total_area = 0;
+my $panel_size = undef;
+my $panel_area = undef;
+my $pixel_size = undef;
+my $pixel_area = undef;
+my $subpixel_size = undef;
+my $subpixel_area = undef;
+
+
+# --- Calculate totals.
+
+while (<STDIN>)
+{
+  chop;
+  s/^\s+//; s/\s+$//;
+
+  if (m/^Command line:/)
+  {
+    $total_panels++;
+  }
+  elsif (m/^Supersampling \S+ depth:\s+\d to (\d+)/)
+  {
+    my $max_depth = $1;
+    my $spp = (2 ** $max_depth) ** 2;
+    if (!defined($subpixels_per_pixel) || ($spp > $subpixels_per_pixel))
+      { $subpixels_per_pixel = $spp; }
+    defined($panel_area) or die;
+    defined($pixels_per_panel) or die;
+    defined($pixel_size) or die;
+    $subpixel_size = $pixel_size / sqrt($subpixels_per_pixel);
+    $subpixel_area = $subpixel_size * $subpixel_size;
+  }
+  elsif (m/^(.*?):\s+(\S+)(?:\s+(.*))?$/)
+  {
+    my ($key, $value, $value_extra) = ($1, $2, $3);
+
+    if ($key eq "Size x")
+      { $panel_x_size = $value; }
+    elsif ($key eq "Size y")
+      { $panel_y_size = $value;
+        $panel_y_size == $panel_x_size or die;
+        $panel_size = $panel_y_size;
+        $panel_area = $panel_x_size * $panel_y_size;
+        $total_area += $panel_area; }
+    elsif ($key eq "Maximum iterations")
+      { $max_iter = $value; }
+    elsif ($key eq "Pixel size")
+      { $value_extra =~ s/^x //;  # KLUDGE
+        $value_extra == $value or die;  # KLUDGE
+        $pixels_per_panel = $value * $value_extra;  # KLUDGE
+        defined($panel_area) or die;
+        $pixel_area = $panel_area / $pixels_per_panel;
+        $pixel_size = $panel_size / $value; }
+    elsif ($key eq "CPU time")
+      { $total_cpu_time += $value; }
+    elsif ($key eq "Total pixels in image")
+      { $total_pixels += $value;
+        $total_subpixels += int(($value * $subpixels_per_pixel) + .5); }
+    elsif ($key eq "Total interior pixels")
+      { $total_int_pixels += $value;
+        $total_int_subpixels += int(($value * $subpixels_per_pixel) + .5); }
+    elsif ($key eq "Total exterior pixels")
+      { $total_ext_pixels += $value;
+        $total_ext_subpixels += int(($value * $subpixels_per_pixel) + .5); }
+    elsif ($key eq "Total probes")
+      { $total_probes += $value; }
+    elsif ($key eq "Total interior probes")
+      { $total_int_probes += $value; }
+    elsif ($key eq "Total exterior probes")
+      { $total_ext_probes += $value; }
+    elsif ($key eq "Total iterations")
+      { $total_iter += $value; }
+    elsif ($key eq "Total interior iterations")
+      { $total_int_iter += $value; }
+    elsif ($key eq "Total exterior iterations")
+      { $total_ext_iter += $value; }
+  }
+  elsif (m/^(\d+)\s+(\d+)\s+\S+%\s+\S+%(?:\s+(\d+)\s+\S+%\s+\S+%)?$/)
+  {
+    my ($iter, $int_count, $ext_count) = ($1, $2, $3);
+    $iter_buckets->{$iter}{int} ||= 0;
+    $iter_buckets->{$iter}{ext} ||= 0;
+    $iter_buckets->{$iter}{int} += $int_count;
+    $iter_buckets->{$iter}{ext} += $ext_count || 0;
+  }
+}
+
+
+# --- Print general summary.
+
+print "=" x 79, "\n";
+
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single panel size",
+       $panel_size,
+       log2(1 / $panel_size);
+
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single panel area",
+       $panel_area,
+       log2(1 / $panel_area);
+
+print "\n";
+
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single pixel size",
+       $pixel_size,
+       log2(1 / $pixel_size);
+
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single pixel area",
+       $pixel_area,
+       log2(1 / $pixel_area);
+
+print "\n";
+
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single subpixel size",
+       $subpixel_size,
+       log2(1 / $subpixel_size);
+
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single subpixel area",
+       $subpixel_area,
+       log2(1 / $subpixel_area);
+
+print "\n";
+
+printf "%30s: %34.30f\n", "Total area", $total_area;
+
+printf "%30s: %34.30f\n", "Total interior area",
+       $total_int_subpixels * $subpixel_area;
+
+printf "%30s: %34.30f\n", "Total exterior area",
+       $total_ext_subpixels * $subpixel_area;
+
+print "\n";
+print "-" x 79, "\n";
+
+printf "%30s: %16d\n", "Total panels", $total_panels;
+
+printf "%30s: %20.3f\n", "Total interior panels",
+       $total_int_pixels / $pixels_per_panel;
+
+printf "%30s: %20.3f\n", "Total exterior panels",
+       $total_ext_pixels / $pixels_per_panel;
+
+print "\n";
+
+printf "%30s: %16d%4s (%s)\n", "Total pixels",
+       $total_pixels, "",
+       special_format_big_number($total_pixels);
+
+printf "%30s: %20.3f (%s)\n", "Total interior pixels",
+       $total_int_pixels,
+       special_format_big_number($total_int_pixels);
+
+printf "%30s: %20.3f (%s)\n", "Total exterior pixels",
+       $total_ext_pixels,
+       special_format_big_number($total_ext_pixels);
+
+print "\n";
+
+printf "%30s: %16d (%s)\n", "Total subpixels",
+       $total_subpixels,
+       special_format_big_number($total_subpixels);
+
+printf "%30s: %16d (%s)\n", "Total interior subpixels",
+       $total_int_subpixels,
+       special_format_big_number($total_int_subpixels);
+
+printf "%30s: %16d (%s)\n", "Total exterior subpixels",
+       $total_ext_subpixels,
+       special_format_big_number($total_ext_subpixels);
+
+print "\n";
+print "-" x 79, "\n";
+
+printf "%30s: %16d (%s)\n", "Total probes",
+       $total_probes,
+       special_format_big_number($total_probes);
+
+printf "%30s: %16d (%s)\n", "Total interior probes",
+       $total_int_probes,
+       special_format_big_number($total_int_probes);
+
+printf "%30s: %16d (%s)\n", "Total exterior probes",
+       $total_ext_probes,
+       special_format_big_number($total_ext_probes);
+
+printf "%30s: %16.0f (%s)\n", "Probes per CPU second",
+       $total_probes / $total_cpu_time,
+       special_format_big_number($total_probes / $total_cpu_time);
+
+print "\n";
+
+printf "%30s: %16d (%s)\n", "Total iterations",
+       $total_iter,
+       special_format_big_number($total_iter);
+
+printf "%30s: %16d (%s)\n", "Total interior iterations",
+       $total_int_iter,
+       special_format_big_number($total_int_iter);
+
+printf "%30s: %16d (%s)\n", "Total exterior iterations",
+       $total_ext_iter,
+       special_format_big_number($total_ext_iter);
+
+printf "%30s: %16.0f (%s)\n", "Iterations per CPU second",
+       $total_iter / $total_cpu_time,
+       special_format_big_number($total_iter / $total_cpu_time);
+
+print "\n";
+print "-" x 79, "\n";
+
+printf "%30s: %20.3f (%s)\n", "Max. iterations per probe",
+       $max_iter,
+       special_format_big_number($max_iter);
+
+printf "%30s: %20.3f (%s)\n", "Avg. iterations per probe",
+       $total_iter / $total_probes,
+       special_format_big_number($total_iter / $total_probes);
+
+printf "%30s: %20.3f (%s)\n", "Avg. iter. per interior probe",
+       $total_int_iter / $total_ext_probes,
+       special_format_big_number($total_int_iter / $total_ext_probes);
+
+printf "%30s: %20.3f (%s)\n", "Avg. iter. per exterior probe",
+       $total_ext_iter / $total_ext_probes,
+       special_format_big_number($total_ext_iter / $total_ext_probes);
+
+print "\n";
+
+printf "%30s: %20.3f (%s)\n", "Avg. probes per pixel",
+       $total_probes / $total_pixels,
+       special_format_big_number($total_probes / $total_pixels);
+
+printf "%30s: %20.3f (%s)\n", "Avg. probes per interior pixel",
+       $total_int_probes / $total_int_pixels,
+       special_format_big_number($total_int_probes / $total_int_pixels);
+
+printf "%30s: %20.3f (%s)\n", "Avg. probes per exterior pixel",
+       $total_ext_probes / $total_ext_pixels,
+       special_format_big_number($total_ext_probes / $total_ext_pixels);
+
+print "\n";
+
+printf "%30s: %20.3f\n", "Total CPU time", $total_cpu_time;
+
+print "\n";
+
+
+# --- Print iteration histogram.
+
+print "=" x 79, "\n";
+
+printf "%13s  %31s  %31s\n",
+       "", "INTERIOR         ", "EXTERIOR         ";
+printf "%13s  %31s  %31s\n",
+       "", "----------------------------", "----------------------------";
+
+printf "%13s  %22s %8s  %22s %8s\n",
+       "Iterations",
+       "Probes      ", "% Time",
+       "Probes      ", "% Time";
+printf "%13s  %22s %8s  %22s %8s\n",
+       "----------",
+       "-------------------", "-------",
+       "-------------------", "-------";
+for my $iter (sort {$a <=> $b} keys %$iter_buckets)
+{
+  my $bucket = $iter_buckets->{$iter};
+  printf "%13d  %13d %7.3f%% %7.3f%%  %13d %7.3f%% %7.3f%%\n",
+    $iter,
+    $bucket->{int},
+    ($bucket->{int} / ($total_int_probes||1)) * 100,
+    (($bucket->{int} * $iter) / $total_iter) * 100,
+    $bucket->{ext},
+    ($bucket->{ext} / ($total_ext_probes||1)) * 100,
+    (($bucket->{ext} * $iter) / $total_iter) * 100;
+}
+printf "%13s  %22s %8s  %22s %8s\n",
+       "----------",
+       "-------------------", "-------",
+       "-------------------", "-------";
+printf "%13s  %13d %7.3f%% %7.3f%%  %13d %7.3f%% %7.3f%%\n",
+  "",
+  $total_int_probes,
+  100,
+  ($total_int_iter / $total_iter) * 100,
+  $total_ext_probes,
+  100,
+  ($total_ext_iter / $total_iter) * 100;
+
+
+# --- Sample input follows "__END__" marker.
+
+__END__
+Command line:
+mset_image -s cx=-0.375000000000 cy=-0.656250000000 cd=0.031250000000 i=1000000000 px=1024 py=1024 ssimin=2 ssimax=4 ssemin=0 ssemax=4 sss=0.990000
+
+===============================================================================
+         MP precision required:  38 bits
+                      Center x:  -0.37500000000
+                      Center y:  -0.65625000000
+                        Size x:  0.03125000000
+                        Size y:  0.03125000000
+            Maximum iterations:  1000000000
+                    Pixel size:  1024 x 1024
+  Supersampling interior depth:  2 to 4
+  Supersampling exterior depth:  0 to 4
+      Supersampling solidarity:  0.990000
+
+===============================================================================
+                      CPU time:                 187.692 seconds
+
+        Total pixels processed:             1050625 (1.05 million)
+         Total pixels in image:             1048576 (1.05 million)
+         Total interior pixels:                6317.19140625 (0.6% of image)
+         Total exterior pixels:             1042258.80859375 (99.4% of image)
+             Pixels per second:                5587 (5.59 thousand)
+
+                  Total probes:            49299082 (49.3 million)
+         Total interior probes:              143812 (0.3% of probes)
+         Total exterior probes:            49155270 (99.7% of probes)
+             Probes per second:              262660 (263 thousand)
+
+              Total iterations:         15515680145 (15.5 billion)
+     Total interior iterations:          9280343392 (59.8% of iterations)
+     Total exterior iterations:          6235336753 (40.2% of iterations)
+         Iterations per second:            82665748 (82.7 million)
+
+     Avg. iterations per probe:                 314.726
+ Avg. iter. per interior probe:               64531.078
+ Avg. iter. per exterior probe:                 126.850
+         Avg. probes per pixel:                  46.924
+
+===============================================================================
+   Iterations       Interior     %age   %ile       Exterior     %age   %ile
+   ----------       --------  -------  -----       --------  -------  -----
+            0              0   0.000%   0.0%              0   0.000%   0.0%
+            1              0   0.000%   0.0%              0   0.000%   0.0%
+            2              0   0.000%   0.0%              0   0.000%   0.0%
+            4              0   0.000%   0.0%              0   0.000%   0.0%
+            8              0   0.000%   0.0%              0   0.000%   0.0%
+           16              0   0.000%   0.0%          66048   0.134%   0.1%
+           32              0   0.000%   0.0%        5730078  11.657%  11.8%
+           64            330   0.229%   0.2%       29514211  60.043%  71.8%
+          128           1400   0.973%   1.2%       12241432  24.904%  96.7%
+          256           4915   3.418%   4.6%        1318956   2.683%  99.4%
+          512          12695   8.827%  13.4%         189229   0.385%  99.8%
+         1024          18077  12.570%  26.0%          54960   0.112%  99.9%
+         2048          25305  17.596%  43.6%          22147   0.045% 100.0%
+         4096          21132  14.694%  58.3%           9777   0.020% 100.0%
+         8192          21768  15.136%  73.4%           4503   0.009% 100.0%
+        16384          14544  10.113%  83.6%           2109   0.004% 100.0%
+        32768          10893   7.574%  91.1%            954   0.002% 100.0%
+        65536           5369   3.733%  94.9%            461   0.001% 100.0%
+       131072           3614   2.513%  97.4%            205   0.000% 100.0%
+       262144           1982   1.378%  98.8%             96   0.000% 100.0%
+       524288            914   0.636%  99.4%             52   0.000% 100.0%
+      1048576            472   0.328%  99.7%             37   0.000% 100.0%
+      2097152            192   0.134%  99.9%             12   0.000% 100.0%
+      4194304            115   0.080%  99.9%              2   0.000% 100.0%
+      8388608             49   0.034% 100.0%              1   0.000% 100.0%
+     16777216             16   0.011% 100.0%              0   0.000% 100.0%
+     33554432             16   0.011% 100.0%              0   0.000% 100.0%
+     67108864              9   0.006% 100.0%              0   0.000% 100.0%
+    134217728              5   0.003% 100.0%              0   0.000% 100.0%
+    268435456              0   0.000% 100.0%              0   0.000% 100.0%
+    536870912              0   0.000% 100.0%              0   0.000% 100.0%
+   1000000000              0   0.000% 100.0%
+
