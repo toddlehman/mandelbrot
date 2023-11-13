@@ -74,7 +74,7 @@ bool fetch_mp_real_value(const char *str, mp_real *value)
   if (validate_numeric_value(str, true))
   {
     mp_init2(*value, mp_get_min_prec_from_string(str));
-    mp_set_str(*value, str, 10, MP_ROUND);
+    mp_set_str(*value, str, 10);
     return true;
   }
   else
@@ -182,24 +182,47 @@ bool process_argument(MainControl *this, const char *str)
   {
     mp_clear(this->xy_min_size);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->xy_min_size);
-    mp_mul_d(this->xy_min_size, this->xy_min_size, 2, MP_ROUND);
+    mp_mul_d(this->xy_min_size, this->xy_min_size, 2);
   }
   else if ((value = argument_matches(key, "d=")))
   {
     mp_clear(this->xy_min_size);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->xy_min_size);
   }
-  else if ((value = argument_matches(key, "ar=")))
+  else if ((value = argument_matches(key, "cx=")))
   {
-    valid = fetch_real_value(value, &this->roll);
+    mp_clear(this->camera_x);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->camera_x);
   }
-  else if ((value = argument_matches(key, "ap=")))
+  else if ((value = argument_matches(key, "cy=")))
   {
-    valid = fetch_real_value(value, &this->pitch);
+    mp_clear(this->camera_y);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->camera_y);
   }
-  else if ((value = argument_matches(key, "ay=")))
+  else if ((value = argument_matches(key, "cz=")))
   {
-    valid = fetch_real_value(value, &this->yaw);
+    mp_clear(this->camera_z);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->camera_z);
+  }
+  else if ((value = argument_matches(key, "cd=")))
+  {
+    mp_clear(this->camera_d);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->camera_d);
+  }
+  else if ((value = argument_matches(key, "cox=")))
+  {
+    valid = fetch_real_value(value, &this->camera_ox);
+    this->camera_ox *= TAU / 360.0;  // Convert degrees to radians.
+  }
+  else if ((value = argument_matches(key, "coy=")))
+  {
+    valid = fetch_real_value(value, &this->camera_oy);
+    this->camera_oy *= TAU / 360.0;  // Convert degrees to radians.
+  }
+  else if ((value = argument_matches(key, "coz=")))
+  {
+    valid = fetch_real_value(value, &this->camera_oz);
+    this->camera_oz *= TAU / 360.0;  // Convert degrees to radians.
   }
   else if ((value = argument_matches(key, "n=")))
   {
@@ -300,15 +323,23 @@ int main (int arg_count, const char *args[])
   MainControl _this, *this = &_this;
 
   // Set program defaults.
+  mp_init2(this->camera_x,    32);
+  mp_init2(this->camera_y,    32);
+  mp_init2(this->camera_z,    32);
+  mp_init2(this->camera_d,    32);
   mp_init2(this->x_center,    32);
   mp_init2(this->y_center,    32);
   mp_init2(this->xy_min_size, 32);
-  mp_set_d(this->x_center,   -0.75, MP_ROUND);
-  mp_set_d(this->y_center,    0.00, MP_ROUND);
-  mp_set_d(this->xy_min_size, 2.75, MP_ROUND);
-  this->roll  = 0.0;
-  this->pitch = 0.0;
-  this->yaw   = 0.0;
+  mp_set_d(this->camera_x,   -0.75);
+  mp_set_d(this->camera_y,    0.00);
+  mp_set_d(this->camera_z,    2.75);
+  mp_set_d(this->camera_d,    0.50);
+  mp_set_d(this->x_center,   -0.75);
+  mp_set_d(this->y_center,    0.00);
+  mp_set_d(this->xy_min_size, 2.75);
+  this->camera_ox = 0.0;
+  this->camera_oy = 0.0;
+  this->camera_oz = 0.0;
   this->iter_max = 10000;
   this->width_pixels = 8;
   this->height_pixels = 8;
@@ -352,9 +383,13 @@ int main (int arg_count, const char *args[])
   }
 
   Image *image = image_create(
-    this->x_center,
-    this->y_center,
-    this->xy_min_size,
+    this->camera_x,
+    this->camera_y,
+    this->camera_z,
+    this->camera_d,
+    this->camera_ox,
+    this->camera_oy,
+    this->camera_oz,
     this->width_pixels,
     this->height_pixels,
     this->supersample_interior_min_depth,
@@ -373,6 +408,10 @@ int main (int arg_count, const char *args[])
 
   image_destroy(&image);
 
+  mp_clear(this->camera_x);
+  mp_clear(this->camera_y);
+  mp_clear(this->camera_z);
+  mp_clear(this->camera_d);
   mp_clear(this->x_center);
   mp_clear(this->y_center);
   mp_clear(this->xy_min_size);

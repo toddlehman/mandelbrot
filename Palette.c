@@ -171,6 +171,10 @@ Palette *palette_create(void)
     (LinearRGB) { 0.0 ,0.0 ,0.0 };  // Black (for production)
     //(LinearRGB) { 0.02,0.02,0.02};  // Dark gray (for debugging)
 
+  this->dead_space_color =
+    //(LinearRGB) { 0.0, 0.0, 0.0 };  // Black
+    (LinearRGB) { 0.4, 0.7, 1.0 };  // Sky blue
+
   #if 0
   printf("Color palette:\n");
   printf("%d colors (+1 extra padding on the end)\n", this->exterior_count);

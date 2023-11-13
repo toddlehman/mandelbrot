@@ -10,12 +10,17 @@
 
 typedef struct
 {
+  mp_real  camera_x;   // x-coordinate
+  mp_real  camera_y;   // y-coordinate
+  mp_real  camera_z;   // z-coordinate
+  mp_real  camera_d;   // distance to viewport
+  real     camera_oz;  // z-axis rotational angle (neg=right, pos=left)
+  real     camera_ox;  // x-axis rotational angle (neg=down, pos=up)
+  real     camera_oy;  // y-axis rotational angle (neg=left, pos=right)
+
   mp_real  x_center;
   mp_real  y_center;
   mp_real  xy_min_size;
-  real     roll;
-  real     pitch;
-  real     yaw;
 
   uint64   iter_max;
 

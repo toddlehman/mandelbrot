@@ -121,7 +121,7 @@ Mandelbrot *mandelbrot_create(uint64 iter_max,
   this->conf.mp_prec = mp_prec;
 
   mp_init2(this->conf.periodicity_epsilon, mp_prec);
-  mp_set(this->conf.periodicity_epsilon, periodicity_epsilon, MP_ROUND);
+  mp_set(this->conf.periodicity_epsilon, periodicity_epsilon);
 
 
   // Initialize (zero out) statistics.
@@ -435,7 +435,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
       {
         x2 = x * x; y2 = y * y;
         if ((z2 = x2 + y2) > r2)  // Use custom escape radius here.
-          return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
+          return mandelbrot_result_exterior_iterated(i+UNROLL, dwell(i, z2));
         y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
       }
     }
@@ -538,7 +538,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
       {
         x2 = x * x; y2 = y * y;
         if ((z2 = x2 + y2) > r2)  // Use custom escape radius here.
-          return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
+          return mandelbrot_result_exterior_iterated(i+UNROLL, dwell(i, z2));
         y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
       }
     }
@@ -624,7 +624,7 @@ MandelbrotResult mandelbrot_compute_low_precision_no_periodicity(
       {
         x2 = x * x; y2 = y * y;
         if ((z2 = x2 + y2) > r2)  // Use custom escape radius here.
-          return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
+          return mandelbrot_result_exterior_iterated(i+UNROLL, dwell(i, z2));
         y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
       }
     }
@@ -715,19 +715,19 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
   if (!initialized)
   {
     mp_init2(_n_0_75, mp_get_prec(epsilon));
-    mp_set_d(_n_0_75, -0.75, MP_ROUND);
+    mp_set_d(_n_0_75, -0.75);
 
     mp_init2(_n_1_25, mp_get_prec(epsilon));
-    mp_set_d(_n_1_25, -1.25, MP_ROUND);
+    mp_set_d(_n_1_25, -1.25);
 
     mp_init2(_n_2, mp_get_prec(epsilon));
-    mp_set_d(_n_2, -2.0, MP_ROUND);
+    mp_set_d(_n_2, -2.0);
 
     mp_init2(_p_0_0625, mp_get_prec(epsilon));
-    mp_set_d(_p_0_0625, +0.0625, MP_ROUND);
+    mp_set_d(_p_0_0625, +0.0625);
 
     mp_init2(r2, mp_get_prec(epsilon));
-    mp_set_d(r2, ESCAPE_RADIUS_SQUARED, MP_ROUND);
+    mp_set_d(r2, ESCAPE_RADIUS_SQUARED);
 
     mp_init2(x,      mp_get_prec(epsilon));
     mp_init2(y,      mp_get_prec(epsilon));
@@ -744,13 +744,13 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
   // Early-out test for membership in main cardioid.
   if (mp_greaterequal_p(cx, _n_0_75))       // if (cx >= -0.75)
   {
-    mp_sub_d(x, cx, 0.25, MP_ROUND);        // x = cx - 0.25;
-    mp_sqr(x2, x, MP_ROUND);                //   x2 = x*x;
-    mp_sqr(y2, cy, MP_ROUND);               //   y2 = cy*cy;
-    mp_add(y, x2, y2, MP_ROUND);            // y = x*x + cy*cy;
-    mp_add(x, x, y, MP_ROUND);              // x += y;
-    mp_add(x, x, y, MP_ROUND);              // x += y;
-    mp_sqr(x2, x, MP_ROUND);                //   x2 = x*x;
+    mp_sub_d(x, cx, 0.25);                  // x = cx - 0.25;
+    mp_sqr(x2, x);                          //   x2 = x*x;
+    mp_sqr(y2, cy);                         //   y2 = cy*cy;
+    mp_add(y, x2, y2);                      // y = x*x + cy*cy;
+    mp_add(x, x, y);                        // x += y;
+    mp_add(x, x, y);                        // x += y;
+    mp_sqr(x2, x);                          //   x2 = x*x;
     if (mp_lessequal_p(x2, y))              // if (x*x <= y)
       return mandelbrot_result_interior_uniterated();
   }
@@ -758,10 +758,10 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
   // Early-out test for membership in largest disc.
   else if (mp_greaterequal_p(cx, _n_1_25))  // if (cx >= -1.25)
   {
-    mp_add_d(x, cx, 1.0, MP_ROUND);         // x = cx + 1.0;
-    mp_sqr(x2, x, MP_ROUND);                //   x2 = x*x;
-    mp_sqr(y2, cy, MP_ROUND);               //   y2 = cy*cy;
-    mp_add(z2, x2, y2, MP_ROUND);           //   z2 = x2 + y2;
+    mp_add_d(x, cx, 1.0);                   // x = cx + 1.0;
+    mp_sqr(x2, x);                          //   x2 = x*x;
+    mp_sqr(y2, cy);                         //   y2 = cy*cy;
+    mp_add(z2, x2, y2);                     //   z2 = x2 + y2;
     if (mp_lessequal_p(z2, _p_0_0625))      // if (x*x + cy*cy <= 0.0625)
       return mandelbrot_result_interior_uniterated();
   }
@@ -777,10 +777,10 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
 
   // Handle other cases with periodicity checking.
 
-  mp_set(x, cx, MP_ROUND);                  // x = cx;
-  mp_set(y, cy, MP_ROUND);                  // y = cy;
-  mp_set_d(x_base, 1e99, MP_ROUND);         // x_base = 1e99;
-  mp_set_d(y_base, 1e99, MP_ROUND);         // y_base = 1e99;
+  mp_set(x, cx);                            // x = cx;
+  mp_set(y, cy);                            // y = cy;
+  mp_set_d(x_base, 1e99);                   // x_base = 1e99;
+  mp_set_d(y_base, 1e99);                   // y_base = 1e99;
   // FIXME:  These ^^^^ are ugly and icky. Figure out some other way to set
   // a value of "infinity."
 
@@ -790,29 +790,29 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
 
     for (uint64 i = i_base; i < i_bound; )
     {
-      mp_sqr(x2, x, MP_ROUND);              // x2 = x * x;
-      mp_sqr(y2, y, MP_ROUND);              // y2 = y * y;
-      mp_add(z2, x2, y2, MP_ROUND);         // z2 = x2 + y2;
+      mp_sqr(x2, x);                        // x2 = x * x;
+      mp_sqr(y2, y);                        // y2 = y * y;
+      mp_add(z2, x2, y2);                   // z2 = x2 + y2;
 
       if (mp_greater_p(z2, r2))             // if (z2 > r2)
       {
-        real _z2 = mp_get_d(z2, MP_ROUND);
-        return mandelbrot_result_exterior(i, dwell(i, _z2));
+        real _z2 = mp_get_d(z2);          
+        return mandelbrot_result_exterior_iterated(i, dwell(i, _z2));
       }
 
-      mp_mul(y, x, y, MP_ROUND);            // y = x * y;
-      mp_add(y, y, y, MP_ROUND);            // y += y;
-      mp_add(y, y, cy, MP_ROUND);           // y += cy;
-      mp_sub(x, x2, y2, MP_ROUND);          // x = x2 - y2;
-      mp_add(x, x, cx, MP_ROUND);           // x += cx;
+      mp_mul(y, x, y);                      // y = x * y;
+      mp_add(y, y, y);                      // y += y;
+      mp_add(y, y, cy);                     // y += cy;
+      mp_sub(x, x2, y2);                    // x = x2 - y2;
+      mp_add(x, x, cx);                     // x += cx;
       i++;
 
-      mp_sub(t, x, x_base, MP_ROUND);       // t = x - x_base;
-      mp_abs(t, t, MP_ROUND);               // t = fabs(x - x_base);
+      mp_sub(t, x, x_base);                 // t = x - x_base;
+      mp_abs(t, t);                         // t = fabs(x - x_base);
       if (mp_lessequal_p(t, epsilon))       // if (fabs(x-x_base) <= epsilon)
       {
-        mp_sub(t, y, y_base, MP_ROUND);     // t = y - y_base;
-        mp_abs(t, t, MP_ROUND);             // t = fabs(y - y_base);
+        mp_sub(t, y, y_base);               // t = y - y_base;
+        mp_abs(t, t);                       // t = fabs(y - y_base);
         if (mp_lessequal_p(t, epsilon))     // if (fabs(y-y_base) <= epsilon)
         {
           return mandelbrot_result_interior_iterated_periodic(i, i - i_base);
@@ -820,8 +820,8 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
       }
     }
 
-    mp_set(x_base, x, MP_ROUND);            // x_base = x;
-    mp_set(y_base, y, MP_ROUND);            // y_base = y;
+    mp_set(x_base, x);                      // x_base = x;
+    mp_set(y_base, y);                      // y_base = y;
     i_base = i_bound;
   }
 
@@ -841,9 +841,9 @@ MandelbrotResult mandelbrot_compute(Mandelbrot *this, mp_real cx, mp_real cy)
   if (this->conf.mp_prec <= REAL_MANTISSA)
   {
     mr = mandelbrot_compute_low_precision(
-           mp_get_d(cx, MP_ROUND),
-           mp_get_d(cy, MP_ROUND),
-           mp_get_d(this->conf.periodicity_epsilon, MP_ROUND),
+           mp_get_d(cx),
+           mp_get_d(cy),
+           mp_get_d(this->conf.periodicity_epsilon),
            this->conf.iter_max);
   }
   else

@@ -21,6 +21,7 @@ typedef struct
   LinearRGB  interior_iterated_periodic_color;
   LinearRGB  interior_iterated_aperiodic_color;
   LinearRGB  interior_uniterated_color;
+  LinearRGB  dead_space_color;
 }
 Palette;
 
@@ -50,6 +51,13 @@ LinearRGB palette_interior_uniterated_color(Palette *this)
   return this->interior_uniterated_color;
 }
 #endif
+
+//-----------------------------------------------------------------------------
+public_inline_method
+LinearRGB palette_dead_space_color(Palette *this)
+{
+  return this->dead_space_color;
+}
 
 
 //-----------------------------------------------------------------------------

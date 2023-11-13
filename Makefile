@@ -10,6 +10,7 @@ LINK =		cc -L/opt/local/lib -lmpfr
 PROGS =		mset_image
 
 MODULES =	Common \
+		Vector3 \
                 MPReal \
 		Memory \
 		DeepReal \
@@ -17,6 +18,7 @@ MODULES =	Common \
 		RGB \
 		Palette \
 		Pixel \
+                Camera \
 		Image \
 		MainControl
 
@@ -33,6 +35,7 @@ ALL_SRC =	$(H_FILES) \
 		mset_image \
 		mset_make_map \
 		mset_make_zoom \
+		mset_make_flyover \
 		mset_queue_runner \
 		mset_blend_frames \
                 mset_collate_stats \
@@ -52,7 +55,7 @@ clean:
 	@echo Removing $(O_FILES) $(PROGS) $(SNAPSHOT)
 	@rm -f $(O_FILES) $(PROGS) $(SNAPSHOT)
 
-foo:
+info:
 	@echo MODULES = $(MODULES)
 	@echo H_FILES = $(H_FILES)
 	@echo C_FILES = $(C_FILES)
@@ -80,6 +83,7 @@ mset_image:	$(O_FILES)
 MPReal.o:       MPReal.h       MPReal.c
 
 Common.o:	Common.h       Common.c
+Vector3.o:	Vector3.h      Vector3.c       Common.o
 Memory.o:	Memory.h       Memory.c        Common.o
 
 DeepReal.o:	DeepReal.h     DeepReal.c      Common.o
@@ -88,6 +92,7 @@ Mandelbrot.o:	Mandelbrot.h   Mandelbrot.c
 RGB.o:		RGB.h          RGB.c           Common.o
 Palette.o:	Palette.h      Palette.c       RGB.o
 Pixel.o:	Pixel.h        Pixel.c         RGB.o
+Camera.o:       Camera.h       Camera.c        Common.o
 Image.o:	Image.h        Image.c         Mandelbrot.o Pixel.o Palette.o
 
 MainControl.o:	MainControl.h  MainControl.c   Image.o

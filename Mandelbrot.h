@@ -198,13 +198,25 @@ MandelbrotResult mandelbrot_result_interior_uniterated(void)
 
 //-----------------------------------------------------------------------------
 public_inline_function
-MandelbrotResult mandelbrot_result_exterior(const uint64 iter,
-                                            const float64 dwell)
+MandelbrotResult mandelbrot_result_exterior_iterated(const uint64 iter,
+                                                     const float64 dwell)
 {
   return (MandelbrotResult)
   {
     .dwell   = dwell,
     .iter    = iter,
+    .period  = 0,
+  };
+}
+
+//-----------------------------------------------------------------------------
+public_inline_function
+MandelbrotResult mandelbrot_result_exterior_uniterated(const float64 dwell)
+{
+  return (MandelbrotResult)
+  {
+    .dwell   = dwell,
+    .iter    = 0,
     .period  = 0,
   };
 }

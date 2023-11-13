@@ -153,4 +153,5 @@ void error_exit(char *message);
 // PROJECT-LOCAL INCLUDE FILES
 
 #import "MPReal.h"  // Wrapper for <mpfr.h>
+#import "Vector3.h"
 #import "Memory.h"
