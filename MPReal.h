@@ -379,8 +379,12 @@ typedef  mpfr_t  mp_real;
 // EXTENSIONS
 
 extern_public_function
-  void mp_lerp(mp_real *x, mp_real t, mp_real x0, mp_real x1);
+  void mp_lerp(mp_real *x,
+               const mp_real t, const mp_real x0, const mp_real x1);
 
 extern_public_function
-  void mp_lerp_d(mp_real *x, real t, mp_real x0, mp_real x1);
+  void mp_lerp_d(mp_real *x,
+                 const real t, const mp_real x0, const mp_real x1);
 
+extern_public_function
+  int mp_get_min_prec_from_string(const char *str);

@@ -10,7 +10,7 @@ LINK =		cc -L/opt/local/lib -lmpfr
 PROGS =		mset_image
 
 MODULES =	Common \
-                mp_real \
+                MPReal \
 		Memory \
 		DeepReal \
 		Mandelbrot \
@@ -18,7 +18,7 @@ MODULES =	Common \
 		Palette \
 		Pixel \
 		Image \
-		Main
+		MainControl
 
 H_FILES =	$(MODULES:%=%.h)
 
@@ -75,7 +75,7 @@ mset_image:	$(O_FILES)
 
 #------------------------------------------------------------------------------
 
-mp_real.o:      mp_real.h      mp_real.c
+MPReal.o:       MPReal.h       MPReal.c
 
 Common.o:	Common.h       Common.c
 Memory.o:	Memory.h       Memory.c        Common.o
@@ -88,4 +88,5 @@ Palette.o:	Palette.h      Palette.c       RGB.o
 Pixel.o:	Pixel.h        Pixel.c         RGB.o
 Image.o:	Image.h        Image.c         Mandelbrot.o Pixel.o Palette.o
 
-Main.o:		Main.h         Main.c          Image.o
+MainControl.o:	MainControl.h  MainControl.c   Image.o
+

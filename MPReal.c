@@ -2,7 +2,7 @@
   Copyright (c) 2013 by Todd S. Lehman.  All rights reserved.
 -----------------------------------------------------------------------------*/
 
-#import "mp_real.h"
+#import "MPReal.h"
 
 
 //-----------------------------------------------------------------------------
@@ -10,7 +10,8 @@
 
 //-----------------------------------------------------------------------------
 public_function
-void mp_lerp(mp_real *x, mp_real t, mp_real x0, mp_real x1)
+void mp_lerp(mp_real *x,
+             const mp_real t, const mp_real x0, const mp_real x1)
 {
   assert(x);
                                    // *x = x0 + (t * (x1 - x0));
@@ -21,7 +22,8 @@ void mp_lerp(mp_real *x, mp_real t, mp_real x0, mp_real x1)
 
 //-----------------------------------------------------------------------------
 public_function
-void mp_lerp_d(mp_real *x, real t, mp_real x0, mp_real x1)
+void mp_lerp_d(mp_real *x,
+               const real t, const mp_real x0, const mp_real x1)
 {
   assert(x);
                                    // *x = x0 + (t * (x1 - x0));
@@ -32,3 +34,16 @@ void mp_lerp_d(mp_real *x, real t, mp_real x0, mp_real x1)
 
 
 //-----------------------------------------------------------------------------
+// GET MINIMUM PRECISION FROM STRING
+
+public_function
+int mp_get_min_prec_from_string(const char *str)
+{
+  int digit_count = 0;
+
+  for (const char *p = str; *p; p++)
+    if (isdigit(*p))  // KLUDGE
+      digit_count++;
+
+  return (int)ceil(digit_count * log(10) / log(2));
+}

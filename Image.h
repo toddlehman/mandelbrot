@@ -29,9 +29,9 @@ typedef struct
   mp_real  pixel_size;
   mp_real  periodicity_epsilon;
 
-  int      subsample_min_depth;
-  int      subsample_max_depth;
-  real     subsample_solidarity;
+  int      supersample_min_depth;
+  int      supersample_max_depth;
+  real     supersample_solidarity;
 
   uint64   iter_max;
 
@@ -46,8 +46,8 @@ Image;
 extern_public_constructor
   Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
                       int pixel_width, int pixel_height,
-                      int subsample_min_depth, int subsample_max_depth,
-                      real subsample_solidarity,
+                      int supersample_min_depth, int supersample_max_depth,
+                      real supersample_solidarity,
                       uint64 iter_max);
 
 extern_public_destructor

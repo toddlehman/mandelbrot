@@ -149,5 +149,5 @@ void error_exit(char *message);
 //-----------------------------------------------------------------------------
 // PROJECT-LOCAL INCLUDE FILES
 
-#import "mp_real.h"  // Wrapper for <mpfr.h>
+#import "MPReal.h"  // Wrapper for <mpfr.h>
 #import "Memory.h"

@@ -14,14 +14,14 @@
 
 typedef struct
 {
-  MandelbrotResult  mr;             // 24 bytes
-  LinearRGB         color;          // 12 bytes
+  MandelbrotResult  mr;               // 24 bytes
+  LinearRGB         color;            // 12 bytes
 
-  bool              subsample:8;    //  1 byte
-  bool              subsampled:8;   //  1 byte
-  uint16            padding;        //  2 bytes
+  bool              supersample:8;    //  1 byte
+  bool              supersampled:8;   //  1 byte
+  uint16            padding;          //  2 bytes
 }
-Pixel;                              // 40 bytes
+Pixel;                                // 40 bytes
 
 #pragma pack(pop)
 

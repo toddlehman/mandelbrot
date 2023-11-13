@@ -13,18 +13,18 @@
 public_constructor
 Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
                     int width_pixels, int height_pixels,
-                    int subsample_min_depth, int subsample_max_depth,
-                    real subsample_solidarity,
+                    int supersample_min_depth, int supersample_max_depth,
+                    real supersample_solidarity,
                     uint64 iter_max)
 {
   assert(mp_sgn(xy_min_size) > 0);
   assert(width_pixels >= 1);
   assert(height_pixels >= 1);
-  assert(subsample_min_depth >= 0);
-  assert(subsample_max_depth >= 0);
-  assert(subsample_min_depth <= subsample_max_depth);
-  assert(subsample_solidarity >= 0);
-  assert(subsample_solidarity <= 1);
+  assert(supersample_min_depth >= 0);
+  assert(supersample_max_depth >= 0);
+  assert(supersample_min_depth <= supersample_max_depth);
+  assert(supersample_solidarity >= 0);
+  assert(supersample_solidarity <= 1);
   assert(iter_max > 0);
 
   Image *this = mem_alloc_clear(1, sizeof(Image));
@@ -45,8 +45,8 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   bits += log2(mandelbrot_max_scalar_value_during_iteration());
   // Now add enough more bits to support the resolution of a single pixel.
   bits += log2(MIN(width_pixels, height_pixels));
-  // Now add enough more bits to support subsampling.
-  bits += subsample_max_depth;
+  // Now add enough more bits to support supersampling.
+  bits += supersample_max_depth;
   // Now add a few guard bits.  12 is a bare minimum which just barely is
   // sufficient.  16 is a better value.
   bits += 16;
@@ -54,16 +54,6 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   int mp_prec = ceil(bits);
   fprintf(stderr, "precision required:  %d bits\n", mp_prec);
   
-#if 0
-  int mp_prec = mp_get_prec(xy_min_size);  // KLUDGE for now
-  mp_prec += ceil(log2(MAX(width_pixels, height_pixels)));
-  mp_prec += ceil((real)subsample_max_depth / 2);
-  fprintf(stderr, "precision required:  %d bits\n", mp_prec);
-  mp_prec = MAX(mp_prec, 64);
-  //mp_prec = 64;
-  fprintf(stderr, "precision using:  %d bits\n", mp_prec);
-#endif
-
   mp_init2(this->x_center, mp_prec); mp_init2(this->y_center, mp_prec);
   mp_init2(this->x_size,   mp_prec); mp_init2(this->y_size,   mp_prec);
   mp_init2(this->x_min,    mp_prec); mp_init2(this->y_min,    mp_prec);
@@ -126,9 +116,9 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
     mp_clear(periodicity_epsilon);
   }
 
-  this->subsample_min_depth = subsample_min_depth;
-  this->subsample_max_depth = subsample_max_depth;
-  this->subsample_solidarity = subsample_solidarity;
+  this->supersample_min_depth = supersample_min_depth;
+  this->supersample_max_depth = supersample_max_depth;
+  this->supersample_solidarity = supersample_solidarity;
 
   this->_pixels = mem_alloc_clear(this->_di * this->_dj, sizeof(Pixel));
   this->pixels = mem_alloc_clear(this->_di, sizeof(Pixel **));
@@ -211,7 +201,7 @@ bool image_compute_argand_point(Image *this,
 
 
 //-----------------------------------------------------------------------------
-// COMPUTE NON-SUBSAMPLED PIXEL
+// COMPUTE NON-SUPERSAMPLED PIXEL
 
 private_method
 Pixel image_compute_pixel(Image *this, real i, real j)
@@ -273,13 +263,13 @@ void image_populate_pixel(Image *this, int i, int j)
 
 
 //-----------------------------------------------------------------------------
-// CALCULATE SUBSAMPLED PIXEL
+// CALCULATE SUPERSAMPLED PIXEL
 
 private_method
-Pixel image_compute_subsampled_pixel(Image *this,
-                                     real i, real j, real di, real dj,
-                                     Pixel pixel_00,
-                                     int current_subsample_depth)
+Pixel image_compute_supersampled_pixel(Image *this,
+                                       real i, real j, real di, real dj,
+                                       Pixel pixel_00,
+                                       int current_supersample_depth)
 {
   assert(this);
   assert(i >= 0); assert(i + di <= this->di);
@@ -290,43 +280,42 @@ Pixel image_compute_subsampled_pixel(Image *this,
   Pixel pixel_10 = image_compute_pixel(this, i+(di/2), j);
   Pixel pixel_11 = image_compute_pixel(this, i+(di/2), j+(dj/2));
 
-  // Adjust required solidarity based on subsampling depth.  The deeper we go
-  // in subsampling, the sloppier we allow the results to be.  This is somewhat
-  // of a KLUDGE, but it seems to work okay and it allows the maximum subsample
-  // depth to be specified as infinite because it short-circuits that limit (as
-  // long as the value is not 1 to start with).
-  float32 required_solidarity = this->subsample_solidarity;
+  // Adjust required solidarity based on supersampling depth.  The deeper we go
+  // in supersampling, the sloppier we allow the results to be.  This is
+  // somewhat of a KLUDGE, but it seems to work okay and it allows the maximum
+  // supersample depth to be specified as infinite because it short-circuits
+  // that limit (as long as the value is not 1 to start with).
+  float32 required_solidarity = this->supersample_solidarity;
   required_solidarity = 1 - ((1 - required_solidarity) *
-                             pow(2, current_subsample_depth));
+                             pow(2, current_supersample_depth));
 
   // Assess color variation.
   float32 solidarity = linear_rgb_solidarity4(pixel_00.color, pixel_01.color,
                                               pixel_10.color, pixel_11.color);
 
   // If color variation exceeds tolerance, then subdivide each subquadrant of
-  // the pixel recursively (unless the subsample depth limit has already been
+  // the pixel recursively (unless the supersample depth limit has already been
   // reached).
-  bool subsample = (current_subsample_depth < this->subsample_min_depth) ||
-                   //((solidarity < this->subsample_solidarity) &&
-                   ((solidarity < required_solidarity) &&
-                    (current_subsample_depth < this->subsample_max_depth));
-  if (subsample)
+  bool supersample =
+         (current_supersample_depth < this->supersample_min_depth) ||
+         ((solidarity < required_solidarity) &&
+          (current_supersample_depth < this->supersample_max_depth));
+  if (supersample)
   {
-    pixel_00 = image_compute_subsampled_pixel(this, i, j, di/2, dj/2,
-                                          pixel_00, current_subsample_depth+1);
+    pixel_00 = image_compute_supersampled_pixel(this, i, j, di/2, dj/2,
+                                        pixel_00, current_supersample_depth+1);
 
-    pixel_01 = image_compute_subsampled_pixel(this, i, j+dj/2, di/2, dj/2,
-                                          pixel_01, current_subsample_depth+1);
+    pixel_01 = image_compute_supersampled_pixel(this, i, j+dj/2, di/2, dj/2,
+                                        pixel_01, current_supersample_depth+1);
 
-    pixel_10 = image_compute_subsampled_pixel(this, i+di/2, j, di/2, dj/2,
-                                          pixel_10, current_subsample_depth+1);
+    pixel_10 = image_compute_supersampled_pixel(this, i+di/2, j, di/2, dj/2,
+                                        pixel_10, current_supersample_depth+1);
 
-    pixel_11 = image_compute_subsampled_pixel(this, i+di/2, j+dj/2, di/2, dj/2,
-                                          pixel_11, current_subsample_depth+1);
+    pixel_11 = image_compute_supersampled_pixel(this, i+di/2, j+dj/2, di/2, dj/2,
+                                        pixel_11, current_supersample_depth+1);
   }
 
-  // Now return a blend of the four subsamples.
-
+  // Now return a blend of the four supersamples.
   Pixel pixel;
   pixel.color = linear_rgb_average4(pixel_00.color, pixel_01.color,
                                     pixel_10.color, pixel_11.color);
@@ -335,15 +324,15 @@ Pixel image_compute_subsampled_pixel(Image *this,
   pixel.mr.iter = pixel_00.mr.iter + pixel_01.mr.iter +
                   pixel_10.mr.iter + pixel_11.mr.iter;
 
-  if (0) //current_subsample_depth > 1)  // KLUDGE
+  if (0) //current_supersample_depth > 1)  // KLUDGE
   {
     pixel.color = linear_rgb_lerp(solidarity,
         palette_undefined_color(this->palette),
         pixel.color);
   }
 
-  pixel.subsampled = true;   // Subsampling accomplished for this pixel.
-  pixel.subsample  = false;  // Subsampling no longer required for this pixel.
+  pixel.supersampled = true;   // Supersampling accomplished for this pixel.
+  pixel.supersample  = false;  // Supersampling not required for this pixel.
 
   return pixel;
 }
@@ -361,7 +350,7 @@ void image_refine_pixel(Image *this, int i, int j)
 
   // Set new pixel value.
   LinearRGB old_color = this->pixels[i][j].color;
-  this->pixels[i][j] = image_compute_subsampled_pixel(
+  this->pixels[i][j] = image_compute_supersampled_pixel(
     this, i, j, 1, 1,
     this->pixels[i+0][j+0],
     1);
@@ -369,13 +358,13 @@ void image_refine_pixel(Image *this, int i, int j)
 
   // If the color change was significant, then mark the pixel's eight neighbors
   // as also now needing refinement.
-  if (linear_rgb_solidarity2(old_color, new_color) < this->subsample_solidarity)
+  if (linear_rgb_solidarity2(old_color, new_color) < this->supersample_solidarity)
   {
     int i0 = MAX(i-1, 0), i1 = MIN(i+1, this->di-1);
     int j0 = MAX(j-1, 0), j1 = MIN(j+1, this->dj-1);
     for (i = i0; i <= i1; i++)
     for (j = j0; j <= j1; j++)
-      this->pixels[i][j].subsample = true;
+      this->pixels[i][j].supersample = true;
   }
 }
 
@@ -504,23 +493,23 @@ void image_populate(Image *this)
 {
   assert(this);
 
-  bool subsampling = (this->subsample_max_depth > 0) &&
-                     (this->subsample_solidarity > 0);
+  bool supersampling = (this->supersample_max_depth > 0) &&
+                     (this->supersample_solidarity > 0);
 
   // Make a first pass to populate every pixel in the image, including the
-  // extra row and column at the bottom and right edges if subsampling is
+  // extra row and column at the bottom and right edges if supersampling is
   // enabled.
   image_populate_block(this,
                        0,
                        0,
-                       subsampling? this->_di : this->di,
-                       subsampling? this->_dj : this->dj);
+                       supersampling? this->_di : this->di,
+                       supersampling? this->_dj : this->dj);
 
-  // Return now if subsampling is not requested.
-  if (!subsampling)
+  // Return now if supersampling is not requested.
+  if (!supersampling)
     return;
 
-  // Go back and mark pixels for subsampling whose rightward and downward
+  // Go back and mark pixels for supersampling whose rightward and downward
   // neighbors are significantly different in color.  (The "+1"s in the indexes
   // here are safe because the image is padded by one row and column at the
   // bottom and right edges.)
@@ -534,35 +523,35 @@ void image_populate(Image *this)
       this->pixels[i+1][j+1].color
     );
 
-    if (solidarity < this->subsample_solidarity)
+    if (solidarity < this->supersample_solidarity)
     {
-      this->pixels[i][j].subsample = true;
+      this->pixels[i][j].supersample = true;
     }
   }
 
   // Now, refine pixels until the entire image is refined.
-  bool subsampled;
+  bool supersampled;
   do
   {
-    subsampled = false;
+    supersampled = false;
     for (int i = 0; i < this->di; i++)
     for (int j = 0; j < this->dj; j++)
     {
-      if (this->pixels[i][j].subsample)
+      if (this->pixels[i][j].supersample)
       {
-        if (this->pixels[i][j].subsampled)
+        if (this->pixels[i][j].supersampled)
         {
-          this->pixels[i][j].subsample = false;  // Ignore; already done.
+          this->pixels[i][j].supersample = false;  // Ignore; already done.
         }
         else
         {
           image_refine_pixel(this, i, j);
-          subsampled = true;
+          supersampled = true;
         }
       }
     }
   }
-  while (subsampled);
+  while (supersampled);
 
   // Finally, for testing, set to gray any pixels that did not require
   // refinement.
@@ -570,7 +559,7 @@ void image_populate(Image *this)
   for (int i = 0; i < this->di; i++)
   for (int j = 0; j < this->dj; j++)
   {
-    if (!this->pixels[i][j].subsampled)
+    if (!this->pixels[i][j].supersampled)
     {
       this->pixels[i][j].color.r = 0.5;
       this->pixels[i][j].color.g = 0.5;
@@ -650,6 +639,8 @@ void image_output(Image *this, FILE *stream, bool text_format)
   }
 
   free(buffer);
+
+  fflush(stream);
 }
 
 
@@ -803,34 +794,72 @@ void image_output_statistics(Image *this, FILE *stream)
              "                       Size:  (%RNf,%RNf)\n",
              this->x_size, this->y_size);
 
-  fprintf(stream, "         Maximum iterations:  %llu\n", this->mandelbrot->iter_max);
+  fprintf(stream,
+          "         Maximum iterations:  %llu\n",
+          this->mandelbrot->iter_max);
 
-  fprintf(stream, "                 Pixel size:  %d x %d\n", this->dj, this->di);
+  fprintf(stream,
+          "                 Pixel size:  %d x %d\n",
+          this->dj, this->di);
 
-  fprintf(stream, "      Subsampling min depth:  %d\n", this->subsample_min_depth);
-  fprintf(stream, "      Subsampling max depth:  %d\n", this->subsample_max_depth);
-  fprintf(stream, "     Subsampling solidarity:  %f\n", (double)this->subsample_solidarity);
+  fprintf(stream,
+          "    Supersampling min depth:  %d\n",
+          this->supersample_min_depth);
+
+  fprintf(stream,
+          "    Supersampling max depth:  %d\n",
+          this->supersample_max_depth);
+
+  fprintf(stream,
+          "   Supersampling solidarity:  %f\n",
+          (double)this->supersample_solidarity);
+
   fprintf(stream, "\n");
 
-  fprintf(stream, "               Total pixels: %20llu\n", total_pixels);
-  fprintf(stream, "      Total interior pixels: %20llu (%.1f%%)\n", total_interior_pixels,
+  fprintf(stream,
+          "               Total pixels: %20llu\n",
+          total_pixels);
+
+  fprintf(stream,
+          "      Total interior pixels: %20llu (%.1f%%)\n",
+          total_interior_pixels,
           percentage(total_interior_pixels, total_pixels));
-  fprintf(stream, "      Total exterior pixels: %20llu (%.1f%%)\n", total_exterior_pixels,
+
+  fprintf(stream,
+          "      Total exterior pixels: %20llu (%.1f%%)\n",
+          total_exterior_pixels,
           percentage(total_exterior_pixels, total_pixels));
-  fprintf(stream, "\n");
-  fprintf(stream, "           Total iterations: %20llu\n", total_iter);
-  fprintf(stream, "  Total interior iterations: %20llu (%.1f%%)\n", total_interior_iter,
-          percentage(total_interior_iter, total_iter));
-  fprintf(stream, "  Total exterior iterations: %20llu (%.1f%%)\n", total_exterior_iter,
-          percentage(total_exterior_iter, total_iter));
+
   fprintf(stream, "\n");
 
-  fprintf(stream, "         Average iterations: %20.3f\n",
+  fprintf(stream,
+          "           Total iterations: %20llu\n",
+          total_iter);
+
+  fprintf(stream,
+          "  Total interior iterations: %20llu (%.1f%%)\n",
+          total_interior_iter,
+          percentage(total_interior_iter, total_iter));
+
+  fprintf(stream,
+          "  Total exterior iterations: %20llu (%.1f%%)\n",
+          total_exterior_iter,
+          percentage(total_exterior_iter, total_iter));
+
+  fprintf(stream, "\n");
+
+  fprintf(stream,
+          "         Average iterations: %20.3f\n",
           ratio(total_iter, total_pixels));
-  fprintf(stream, "Average interior iterations: %20.3f\n",
+
+  fprintf(stream,
+          "Average interior iterations: %20.3f\n",
           ratio(total_interior_iter, total_interior_pixels));
-  fprintf(stream, "Average exterior iterations: %20.3f\n",
+
+  fprintf(stream,
+          "Average exterior iterations: %20.3f\n",
           ratio(total_exterior_iter, total_exterior_pixels));
+
   fprintf(stream, "\n");
 
 
@@ -903,6 +932,7 @@ void image_output_statistics(Image *this, FILE *stream)
     exterior_tally_aperiodic,
       percentage(exterior_tally_aperiodic, total_exterior_pixels),
       percentage(exterior_tally_log2_running_total, total_exterior_pixels));
-}
 
+  fflush(stream);
+}
 
