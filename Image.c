@@ -273,8 +273,10 @@ bool image_pixel_needs_supersampling(Image *this, Pixel pixel,
   //
   // NOTE:  Is this adjustment really a good thing?  Is it useful?  Or should
   // it be removed?
-  //
-  required_solidarity = 1 - ((1 - required_solidarity) * (1 << ss_depth));
+  // Updated NOTE:  No, I don't think it's a good thing.  It causes little
+  // bright spots not to be removed properly at high depths like 4.  I'm
+  // removing this adjustment.
+  //required_solidarity = 1 - ((1 - required_solidarity) * (1 << ss_depth));
 
   // Now decide based on the adjusted requirement for solidarity, the nature of
   // the pixel, the minimum and maximum supersampling depths, and the current
@@ -413,11 +415,19 @@ Pixel image_compute_supersampled_pixel(Image *this,
   //        (double)pixel.interior_portion);
 
   #if 0
-  if (ss_depth > 1)  // KLUDGE
+  if (ss_depth > 1)  // KLUDGE test.
   {
     pixel.color = linear_rgb_lerp(pow(solidarity, 0.5),
                                   palette_undefined_color(this->palette),
                                   pixel.color);
+  }
+  #elif 0
+  if (ss_depth >= 5)  // Another KLUDGE test.
+  {
+    if (pixel_is_exterior(pixel) && (solidarity < 1))
+      pixel.color = linear_rgb_lerp(solidarity / pow(2, ss_depth - 2),
+                                    (LinearRGB) { 1, 1, 1 },
+                                    pixel.color);
   }
   #endif
 

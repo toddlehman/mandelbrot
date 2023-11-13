@@ -44,10 +44,30 @@ Palette *palette_create(void)
   this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
   this->exterior_locations[i] = 0.83;
   this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
+#elif 0
+  // Classic popular blue->white->yellow->brown->black cycle.  This needs
+  // tuning.  I tried to replice the look of the very nice colors seen here
+  // but didn't manage to do a good job of it:
+  // http://www.misterx.ca/Mandelbrot_Set/M_Set-IMAGES_&_WALLPAPER.html
+  this->exterior_locations[i] = 0.00;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.05, 0.85 };  // Blue
+  this->exterior_locations[i] = 0.03;
+  this->exterior_colors[i++] = (LinearRGB) { 0.10, 0.30, 1.00 };  // Sky blue
+  this->exterior_locations[i] = 0.10;
+  this->exterior_colors[i++] = (LinearRGB) { 1.00, 1.00, 1.00 };  // White
+  this->exterior_locations[i] = 0.17;
+  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.90, 0.30 };  // Yellow
+  this->exterior_locations[i] = 0.25;
+  this->exterior_colors[i++] = (LinearRGB) { 0.70, 0.40, 0.05 };  // Orange
+  this->exterior_locations[i] = 0.40;
+  this->exterior_colors[i++] = (LinearRGB) { 0.40, 0.08, 0.04 };  // Brown
+  this->exterior_locations[i] = 0.70;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.00, 0.00 };  // Black
 #elif 1
   // Really great all-purpose palette.  Finely tuned.
   this->exterior_locations[i] = 0.00;
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.15, 0.85 };  // Blue
+  //this->exterior_colors[i++] = (LinearRGB) { 0.10, 0.15, 0.95 };  // Blue (too bright)
   this->exterior_locations[i] = 0.10;
   this->exterior_colors[i++] = (LinearRGB) { 0.30, 0.00, 0.40 };  // Purple
   this->exterior_locations[i] = 0.20;

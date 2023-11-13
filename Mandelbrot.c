@@ -365,7 +365,21 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
   assert(epsilon > 0);
   assert(i_max > 0);
 
+  // TODO:  Use square neighborhood when epsilon is less than or equal to 1,
+  // and use round neighborhood when epsilon is greater than 1.  The reason
+  // for this distinction is purely aesthetic.  Square is faster and should
+  // always be used when the results of the check are invisible.  Round looks
+  // better for large, sloppy epsilons used in low-quality quick renders.
+  // The reason I'm not doing making a distiction here yet between square and
+  // round is because it will require having two separate and nearly identical
+  // iteration loops in order to maintain the efficiency of a single method.
+  // So this is something for the future.
+  #define EPSILON_SQUARE
+
   const real r2 = ESCAPE_RADIUS_SQUARED;
+  #if !defined(EPSILON_SQUARE)
+  const real epsilon2 = epsilon * epsilon;
+  #endif
 
   real x = cx, y = cy, x_base = 1e99, y_base = 1e99;
 
@@ -381,9 +395,29 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
     #define  ITERATE  \
       x2 = x * x; y2 = y * y; y = x * y; y += y + cy; x = x2 - y2 + cx;
 
-    #define  CHECK  \
-      cycle_detected |= ((fabs(x - x_base) <= epsilon) && \
-                         (fabs(y - y_base) <= epsilon));
+    #if defined(EPSILON_SQUARE)  // Square neighborhood using L1 norm.
+      #define  CHECK  \
+        cycle_detected |= \
+          (fabs(x - x_base) <= epsilon) && \
+          (fabs(y - y_base) <= epsilon);
+    #elif defined(EPSILON_ROUND)  // Round neighborhood using L2 norm.
+      #define  CHECK  \
+        cycle_detected |= \
+          (fabs(x - x_base) <= epsilon) && \
+          (fabs(y - y_base) <= epsilon) && \
+          ((x-x_base)*(x-x_base) + (y-y_base)*(y-y_base) <= epsilon2)
+    #elif defined(EPSILON_ROUND2)  // Round neighborhood using L2 norm.
+      #define  CHECK  \
+        cycle_detected |= \
+          ((x-x_base)*(x-x_base) <= epsilon2) && \
+          ((x-x_base)*(x-x_base) + (y-y_base)*(y-y_base) <= epsilon2)
+    #endif
+    // Sample timings from 
+    //   cx=-.125 cy=.78 cd=0.33 i=1000000000 px=720 py=720
+    //     ssimin=2 ssimax=4 ssemin=0 ssemax=4 sss=0.99
+    // Square:  7484461749 iter / 54.970 sec = 136154186 iter/sec
+    // Round1:  7794880719 iter / 59.116 sec = 131856884 iter/sec
+    // Round2:  7794880719 iter / 70.539 sec = 110504502 iter/sec
 
     const int UNROLL = 8;
     ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK;
