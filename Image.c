@@ -932,7 +932,7 @@ char *special_format_number(uint64 n)
            f >= 100? "%.0f %s":
            f >= 10?  "%.1f %s":
            f >= 1?   "%.2f %s":
-                       "%f %s",
+                     "%.0f %s",  // This case will only occur when f == 0.
            f,
            units[unit_index]);
 

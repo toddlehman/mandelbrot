@@ -606,18 +606,10 @@ MandelbrotResult mandelbrot_compute_low_precision(
                    const real periodicity_epsilon,
                    const uint64 iter_max)
 {
-  //#pragma message("Cardiod/disc test temporarily disabled.")
-  //#if 0  // TEMPORARILY DISABLED
-  // Early-out test for membership in largest disc.
-  if (cx <= -0.75)
-  {
-    real x = cx + 1.0;
-    if (x*x + cy*cy <= 0.0625)
-      return mandelbrot_result_interior_uniterated();
-  }
+  #if 1
 
   // Early-out test for membership in main cardioid.
-  else
+  if (cx >= -0.75)
   {
     real x = cx - 0.25;
     real y = x*x + cy*cy;
@@ -625,7 +617,32 @@ MandelbrotResult mandelbrot_compute_low_precision(
     if (x*x <= y)
       return mandelbrot_result_interior_uniterated();
   }
-  //#endif
+
+  // Early-out test for membership in largest disc, having center (-1,0) and
+  // radius 1/4.
+  else if (cx >= -1.25)
+  {
+    real x = cx + 1.0;
+    if (x*x + cy*cy <= 0.0625)  // Radius 1/4 squared is 1/16.
+      return mandelbrot_result_interior_uniterated();
+  }
+
+  // Early-out test for x-axis.  This is actually very, very important because
+  // periodic orbits here are extremely rare and difficult to detect.  In fact,
+  // in one case, before adding this test, I saw a region that chewed through
+  // 7.89 trillion iterations (maximum iterations per probe was 1 billion).
+  // After adding the test, the same image required only 18.3 million
+  // iterations.  Thus, this simple little early-out test speed things up by a
+  // factor of 430,000 in that particular case -- definitely well worth it.
+  else
+  {
+    if ((cy == 0) && (cx >= -2.0))  // It is already known that cx < -1.25.
+      return mandelbrot_result_interior_uniterated();
+  }
+
+  #else
+    #pragma message("Early-out tests temporarily disabled.")
+  #endif
 
   // Handle other cases with either periodicity checking or standard counting.
   if (periodicity_epsilon > 0)
@@ -653,14 +670,21 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
 {
   assert(i_max > 0);
 
+  // Initialize constants and work variables.
   // FIXME:  These are never deallocated.
-  static mp_real _n_0_75, _p_0_0625;
+  static mp_real _n_0_75, _n_1_25, _n_2, _p_0_0625;
   static mp_real x, y, x2, y2, z2, r2, x_base, y_base, t;
   static bool initialized = false;
   if (!initialized)
   {
     mp_init2(_n_0_75, mp_get_prec(epsilon));
     mp_set_d(_n_0_75, -0.75, MP_ROUND);
+
+    mp_init2(_n_1_25, mp_get_prec(epsilon));
+    mp_set_d(_n_1_25, -1.25, MP_ROUND);
+
+    mp_init2(_n_2, mp_get_prec(epsilon));
+    mp_set_d(_n_2, -2.0, MP_ROUND);
 
     mp_init2(_p_0_0625, mp_get_prec(epsilon));
     mp_set_d(_p_0_0625, +0.0625, MP_ROUND);
@@ -680,19 +704,8 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
     initialized = true;
   }
 
-  // Early-out test for membership in largest disc.
-  if (mp_lessequal_p(cx, _n_0_75))          // if (cx <= 0.75)
-  {
-    mp_add_d(x, cx, 1.0, MP_ROUND);         // x = cx + 1.0;
-    mp_sqr(x2, x, MP_ROUND);                //   x2 = x*x;
-    mp_sqr(y2, cy, MP_ROUND);               //   y2 = cy*cy;
-    mp_add(z2, x2, y2, MP_ROUND);           //   z2 = x2 + y2;
-    if (mp_lessequal_p(z2, _p_0_0625))      // if (x*x + cy*cy <= 0.0625)
-      return mandelbrot_result_interior_uniterated();
-  }
-
   // Early-out test for membership in main cardioid.
-  else
+  if (mp_greaterequal_p(cx, _n_0_75))       // if (cx >= -0.75)
   {
     mp_sub_d(x, cx, 0.25, MP_ROUND);        // x = cx - 0.25;
     mp_sqr(x2, x, MP_ROUND);                //   x2 = x*x;
@@ -705,13 +718,34 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
       return mandelbrot_result_interior_uniterated();
   }
 
+  // Early-out test for membership in largest disc.
+  else if (mp_greaterequal_p(cx, _n_1_25))  // if (cx >= -1.25)
+  {
+    mp_add_d(x, cx, 1.0, MP_ROUND);         // x = cx + 1.0;
+    mp_sqr(x2, x, MP_ROUND);                //   x2 = x*x;
+    mp_sqr(y2, cy, MP_ROUND);               //   y2 = cy*cy;
+    mp_add(z2, x2, y2, MP_ROUND);           //   z2 = x2 + y2;
+    if (mp_lessequal_p(z2, _p_0_0625))      // if (x*x + cy*cy <= 0.0625)
+      return mandelbrot_result_interior_uniterated();
+  }
+
+  // Early-out test for x-axis.
+  else if (mp_greaterequal_p(cx, _n_2))     // if (cx >= -2.0)
+  {
+    // Important note:  The remainder of this test assumes that cx < -1.25,
+    // having already been tested above.
+    if (mp_zero_p(cy))
+      return mandelbrot_result_interior_uniterated();
+  }
+
   // Handle other cases with periodicity checking.
 
   mp_set(x, cx, MP_ROUND);                  // x = cx;
   mp_set(y, cy, MP_ROUND);                  // y = cy;
   mp_set_d(x_base, 1e99, MP_ROUND);         // x_base = 1e99;
   mp_set_d(y_base, 1e99, MP_ROUND);         // y_base = 1e99;
-  // FIXME:    These ^^^^ probably overflow.
+  // FIXME:  These ^^^^ are ugly and icky. Figure out some other way to set
+  // a value of "infinity."
 
   for (uint64 i_base = 0; i_base < i_max; )
   {
