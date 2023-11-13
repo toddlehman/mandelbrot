@@ -245,7 +245,8 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
   real uve = (2.0 / (real)dij_max) / pow(2, this->supersample_max_depth);
 
   // Map viewport coordinates to Argand plane coordinates.
-  if (camera_get_argand_point(this->camera, u, v, &x, &y))
+  real sky_angle;
+  if (camera_get_argand_point(this->camera, u, v, &x, &y, &sky_angle))
   {
     // Determine subpixel size around point (u,v) in the viewport.
     mp_real e, e2, xe, ye;
@@ -255,7 +256,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
     mp_init2(ye, this->mandelbrot->conf.mp_prec);
 
     mp_set_d(e, 1e-6);  // Maximum possible epsilon.
-    if (camera_get_argand_point(this->camera, u - uve, v, &xe, &ye))
+    if (camera_get_argand_point(this->camera, u - uve, v, &xe, &ye, &sky_angle))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -263,7 +264,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
       if (mp_less_p(e2, e))               // if (e2 < e)
         mp_set(e, e2);                    //   e = e2;
     }
-    if (camera_get_argand_point(this->camera, u + uve, v, &xe, &ye))
+    if (camera_get_argand_point(this->camera, u + uve, v, &xe, &ye, &sky_angle))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -271,7 +272,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
       if (mp_less_p(e2, e))               // if (e2 < e)
         mp_set(e, e2);                    //   e = e2;
     }
-    if (camera_get_argand_point(this->camera, u, v - uve, &xe, &ye))
+    if (camera_get_argand_point(this->camera, u, v - uve, &xe, &ye, &sky_angle))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -279,7 +280,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
       if (mp_less_p(e2, e))               // if (e2 < e)
         mp_set(e, e2);                    //   e = e2;
     }
-    if (camera_get_argand_point(this->camera, u, v + uve, &xe, &ye))
+    if (camera_get_argand_point(this->camera, u, v + uve, &xe, &ye, &sky_angle))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -296,6 +297,21 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
     pixel.is_defined = true;
     pixel.is_interior_periodic = mandelbrot_result_is_interior_periodic(mr);
 
+    // Apply fading "fog" based on distance.  This is a quick hack KLUDGE.
+    if (mandelbrot_result_is_exterior(mr))
+    {
+      real d = sqrt(pow(mp_get_d(x) - mp_get_d(this->camera->camera_x), 2) +
+                    pow(mp_get_d(y) - mp_get_d(this->camera->camera_y), 2))
+                 / this->camera->target_camera_rho;
+      real t = atan(d) / (PI / 2);
+      pixel.color = linear_rgb_lerp(
+        pow(t, 12) * 0.7,
+        pixel.color,
+      //(LinearRGB) { 0.50, 0.60, 0.65 }  // Slightly sky-bluish gray fog
+        (LinearRGB) { 0.60, 0.60, 0.60 }  // Gray fog
+      );
+    }
+
     mp_clear(ye);
     mp_clear(xe);
     mp_clear(e2);
@@ -304,7 +320,20 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
   else
   {
     mr = mandelbrot_result_exterior_uniterated(0);
+    #if 0  // OBSOLETE
     pixel.color = palette_dead_space_color(this->palette);
+    #endif
+
+    // This is a big fat KLUDGE.
+    {
+      real f = sky_angle / (PI / 2);
+      pixel.color = linear_rgb_lerp(
+        pow(f, 8),
+        (LinearRGB) { 0.00, 0.05, 0.60 },  // Deep sky blue
+        (LinearRGB) { 0.40, 0.70, 1.00 }   // Light sky blue
+      );
+    }
+
     pixel.interior_portion = 0;
     pixel.is_defined = true;
     pixel.is_interior_periodic = false;

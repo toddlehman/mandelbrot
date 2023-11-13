@@ -168,8 +168,8 @@ Palette *palette_create(void)
     //(LinearRGB) { 0.5, 0.5, 0.5 };  // Gray (for debugging)
 
   this->interior_uniterated_color =
-    (LinearRGB) { 0.0 ,0.0 ,0.0 };  // Black (for production)
-    //(LinearRGB) { 0.02,0.02,0.02};  // Dark gray (for debugging)
+    (LinearRGB) { 0.0, 0.0, 0.0 };  // Black (for production)
+    //(LinearRGB) { 0.02, 0.02, 0.02};  // Dark gray (for debugging)
 
   this->dead_space_color =
     //(LinearRGB) { 0.0, 0.0, 0.0 };  // Black

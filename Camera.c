@@ -97,12 +97,14 @@ void camera_destroy(Camera **p_this)
 //
 // EXIT:   Returns a success code.
 //         If successful, then *x and *y contain the Argand plane coordinates.
-//         Otherwise, *x and *y are set to zero.
+//         Otherwise, *sky_angle contains the angle in radians of the cast ray
+//           as it hits the sky (0 is straight up; π/2 radians is the horizon).
 //
 public_method
 bool camera_get_argand_point(const Camera *this,
                              real u, real v,
-                             mp_real *x, mp_real *y)
+                             mp_real *x, mp_real *y,
+                             real *sky_angle)
 {
   assert(this); assert(x); assert(y);
 
@@ -167,6 +169,13 @@ bool camera_get_argand_point(const Camera *this,
     mp_set_d(*y, 0);
     //fprintf(stderr, "(u,v)=(%f,%f) (x,y)=(undef,undef)\n",
     //        (double)u, (double)v);
+    #if 0  // OBSOLETE
+    return false;
+    #endif
+
+    // This is a big fat KLUDGE.
+    real xy = sqrt((ray.x * ray.x) + (ray.y * ray.y));
+    *sky_angle = (PI / 2) - atan(ray.z / xy);
     return false;
   }
 }

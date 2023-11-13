@@ -55,5 +55,6 @@ extern_public_destructor
 extern_public_method
   bool camera_get_argand_point(const Camera *this,
                                real u, real v,
-                               mp_real *x, mp_real *y);
+                               mp_real *x, mp_real *y,
+                               real *sky_angle);
 
