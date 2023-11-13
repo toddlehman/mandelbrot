@@ -25,12 +25,12 @@
 // Area with high noise and almost all exterior points (this is a very pretty
 // picture, by the way):
 //
-//     x_center:  -1.989994268992313
-//     y_center:   0.000000000999976
-//       x_size:   0.000000000000050
-//     max_iter:   1000000
-//       pixels:   see below
-//     subpixel:   off
+//     x_center: -1.989994268992313
+//     y_center:  0.000000000999976
+//       x_size:  0.000000000000050
+//     max_iter:  1000000
+//       pixels:  see below
+//     subpixel:  off
 //
 //     Size 32 x 32 pixels:
 //     64-bit native hardware floating-point:      0.146 seconds
@@ -49,6 +49,31 @@
 //     128-bit MPFR arbitrary precision:         668.130 seconds (76x slower)
 //     256-bit MPFR arbitrary precision:         771.506 seconds (88x slower)
 
+
+//-----------------------------------------------------------------------------
+// NOTES ON PERIODICITY CHECKING
+//
+// Calculations show that periodicity checking is only about 6% slower than
+// brute-force iteration when calculating exterior points.
+//
+// For example, this deep, gnarly, non-interior region:
+//
+//    x_center: -1.98999426899005
+//    y_center:  0.00000000100163
+//      x_size:  0.00000000000150
+//    max_iter:  100000 (chosen low enough to avoid discrimination between
+//                       interior and exterior points)
+//      pixels:  720x720
+//    subpixel:  off
+//
+// has the following timings:
+//
+//    no periodicity checking:        39.018 seconds
+//    exact periodicity checking:     41.296 seconds (5.84% slower)
+//    inexact periodicity checking:   41.402 seconds (6.11% slower)
+//
+// For interior points, it is of course way faster -- anywhere from ten to
+// thousands of times faster.
 
 
 //-----------------------------------------------------------------------------
@@ -230,7 +255,7 @@ uint64 next_iteration_interval(uint64 iter, uint64 iter_max)
 
   real x = cx, y = cy, x_base = 1e99, y_base = 1e99, x2, y2;
   uint64 i, i_base = 0;
-  for (i = 0; (i < i_max) && ((x2=x*x) + (y2=y*y) < r2); i++)
+  for (i = 0; (i < i_max) && ((x2=x*x) + (y2=y*y) <= r2); i++)
   {
     if ((fabs(x - x_base) <= periodicity_epsilon) &&
         (fabs(y - y_base) <= periodicity_epsilon))
@@ -254,8 +279,9 @@ uint64 next_iteration_interval(uint64 iter, uint64 iter_max)
 
 
 //-----------------------------------------------------------------------------
+#if 0  // OBSOLETE
 private_function
-MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
+MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon_old(
                    const real cx, const real cy, const real epsilon,
                    const uint64 i_max)
 {
@@ -274,7 +300,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
     {
       real x2 = x * x, y2 = y * y, z2 = x2 + y2;
 
-      if (z2 >= r2)
+      if (z2 > r2)
         return mandelbrot_result_exterior(i, dwell(i, z2));
 
       y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
@@ -288,11 +314,80 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
 
   return mandelbrot_result_interior_iterated_aperiodic(i_max);
 }
+#endif
 
 
 //-----------------------------------------------------------------------------
+// NOTE:  Unrolling the tight loop like this provides a 20% speedup over the
+// unrolled version of this function.  Pretty cool.
+
 private_function
-MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
+MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
+                   const real cx, const real cy, const real epsilon,
+                   const uint64 i_max)
+{
+  assert(epsilon > 0);
+  assert(i_max > 0);
+
+  const real r2 = BAILOUT_RADIUS_SQUARED;
+
+  real x = cx, y = cy, x_base = 1e99, y_base = 1e99;
+
+  uint64 i = 0;
+  uint64 i_base = i;
+  uint64 i_bound = next_iteration_interval(i_base, i_max);
+  while (i < i_max)
+  {
+    real save_x = x, save_y = y;
+    real x2, y2, z2;
+    bool cycle_detected = false;
+
+    #define  ITERATE  \
+      x2 = x * x; y2 = y * y; y = x * y; y += y + cy; x = x2 - y2 + cx;
+
+    #define  CHECK  \
+      cycle_detected |= ((fabs(x - x_base) <= epsilon) && \
+                         (fabs(y - y_base) <= epsilon));
+
+    const int UNROLL = 8;
+    ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK;
+    ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK;
+    i += UNROLL;
+
+    #undef   ITERATE
+    #undef   CHECK
+
+    if ((z2 = x2 + y2) > 4)  // Use minimal bailout radius here.
+    {
+      x = save_x; y = save_y; i -= UNROLL;
+      while (i < i_max)
+      {
+        x2 = x * x; y2 = y * y;
+        if ((z2 = x2 + y2) > r2)  // Use custom bailout radius here.
+          return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
+        y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
+      }
+    }
+    else if (cycle_detected)
+    {
+      return mandelbrot_result_interior_iterated_periodic(i, i - i_base);
+    }
+
+    if (i >= i_bound)
+    {
+      x_base = x; y_base = y;
+      i_base = i_bound; i_bound = next_iteration_interval(i_base, i_max);
+    }
+  }
+
+  return mandelbrot_result_interior_iterated_aperiodic(i_max);
+}
+
+
+//-----------------------------------------------------------------------------
+#if 0  // OBSOLETE
+private_function
+MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact_old(
                    const real cx, const real cy,
                    const uint64 i_max)
 {
@@ -310,7 +405,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
     {
       real x2 = x * x, y2 = y * y, z2 = x2 + y2;
 
-      if (z2 >= r2)
+      if (z2 > r2)
         return mandelbrot_result_exterior(i, dwell(i, z2));
 
       y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
@@ -324,11 +419,78 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
 
   return mandelbrot_result_interior_iterated_aperiodic(i_max);
 }
+#endif
 
 
 //-----------------------------------------------------------------------------
+// NOTE:  Unrolling the tight loop like this provides a 18% speedup over the
+// unrolled version of this function.  Pretty cool.
+
 private_function
-MandelbrotResult mandelbrot_compute_low_precision_no_periodicity(
+MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
+                   const real cx, const real cy,
+                   const uint64 i_max)
+{
+  assert(i_max > 0);
+
+  const real r2 = BAILOUT_RADIUS_SQUARED;
+
+  real x = cx, y = cy, x_base = 1e99, y_base = 1e99;
+
+  uint64 i = 0;
+  uint64 i_base = i;
+  uint64 i_bound = next_iteration_interval(i_base, i_max);
+  while (i < i_max)
+  {
+    real save_x = x, save_y = y;
+    real x2, y2, z2;
+    bool cycle_detected = false;
+
+    #define  ITERATE  \
+      x2 = x * x; y2 = y * y; y = x * y; y += y + cy; x = x2 - y2 + cx;
+
+    #define  CHECK  \
+      cycle_detected |= ((x == x_base) && (y == y_base));
+
+    const int UNROLL = 8;
+    ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK;
+    ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK; ITERATE; CHECK;
+    i += UNROLL;
+
+    #undef   ITERATE
+    #undef   CHECK
+
+    if ((z2 = x2 + y2) > 4)  // Use minimal bailout radius here.
+    {
+      x = save_x; y = save_y; i -= UNROLL;
+      while (i < i_max)
+      {
+        x2 = x * x; y2 = y * y;
+        if ((z2 = x2 + y2) > r2)  // Use custom bailout radius here.
+          return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
+        y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
+      }
+    }
+    else if (cycle_detected)
+    {
+      return mandelbrot_result_interior_iterated_periodic(i, i - i_base);
+    }
+
+    if (i >= i_bound)
+    {
+      x_base = x; y_base = y;
+      i_base = i_bound; i_bound = next_iteration_interval(i_base, i_max);
+    }
+  }
+
+  return mandelbrot_result_interior_iterated_aperiodic(i_max);
+}
+
+
+//-----------------------------------------------------------------------------
+#if 0  // OBSOLETE
+private_function
+MandelbrotResult mandelbrot_compute_low_precision_no_periodicity_old(
                    const real cx, const real cy,
                    const uint64 i_max)
 {
@@ -342,13 +504,62 @@ MandelbrotResult mandelbrot_compute_low_precision_no_periodicity(
   {
     real x2 = x * x, y2 = y * y, z2 = x2 + y2;
 
-    if (z2 >= r2)
+    if (z2 > r2)
       return mandelbrot_result_exterior(i, dwell(i, z2));
 
     y = x * y; y += y + cy; x = x2 - y2 + cx;
   }
 
   return mandelbrot_result_interior_iterated_aperiodic(i_max);
+}
+#endif
+
+
+//-----------------------------------------------------------------------------
+// NOTE:  Unrolling the tight loop like this provides an 18% speedup over the
+// unrolled version.  Pretty cool.
+
+private_function
+MandelbrotResult mandelbrot_compute_low_precision_no_periodicity(
+                   const real cx, const real cy,
+                   const uint64 i_max)
+{
+  assert(i_max > 0);
+
+  const real r2 = BAILOUT_RADIUS_SQUARED;
+
+  real x = cx, y = cy;
+
+  uint64 i = 0;
+  while (i < i_max)
+  {
+    real save_x = x, save_y = y;
+    real x2, y2, z2;
+
+    #define  ITERATE  \
+      x2 = x * x; y2 = y * y; y = x * y; y += y + cy; x = x2 - y2 + cx;
+
+    const int UNROLL = 8;
+    ITERATE; ITERATE; ITERATE; ITERATE; ITERATE; ITERATE; ITERATE; ITERATE;
+    i += UNROLL;
+
+    #undef  ITERATE
+
+    if ((z2 = x2 + y2) > 4)  // Use minimal bailout radius here.
+    {
+      x = save_x; y = save_y; i -= UNROLL;
+
+      while (i < i_max)
+      {
+        x2 = x * x; y2 = y * y;
+        if ((z2 = x2 + y2) > r2)  // Use custom bailout radius here.
+          return mandelbrot_result_exterior(i+UNROLL, dwell(i, z2));
+        y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
+      }
+    }
+  }
+
+  return mandelbrot_result_interior_iterated_aperiodic(i);
 }
 
 
@@ -363,7 +574,7 @@ MandelbrotResult mandelbrot_compute_low_precision(
   if (cx <= -0.75)
   {
     real x = cx + 1.0;
-    if (x*x + cy*cy < 0.0625)
+    if (x*x + cy*cy <= 0.0625)
       return mandelbrot_result_interior_uniterated();
   }
 
@@ -378,10 +589,6 @@ MandelbrotResult mandelbrot_compute_low_precision(
   }
 
   // Handle other cases with either periodicity checking or standard counting.
-  // Calculations show that periodicity checking is only about 15% slower than
-  // brute-force iteration when calculating exterior points.  For interior
-  // points, it is of course way faster -- anywhere from 10 to thousands of
-  // times faster.
   if (periodicity_epsilon > 0)
   {
     return mandelbrot_compute_low_precision_periodicity_epsilon(
@@ -441,7 +648,7 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
     mp_sqr(x2, x, MP_ROUND);                //   x2 = x*x;
     mp_sqr(y2, cy, MP_ROUND);               //   y2 = cy*cy;
     mp_add(z2, x2, y2, MP_ROUND);           //   z2 = x2 + y2;
-    if (mp_less_p(z2, _p_0_0625))           // if (x*x + cy*cy < 0.0625)
+    if (mp_lessequal_p(z2, _p_0_0625))      // if (x*x + cy*cy <= 0.0625)
       return mandelbrot_result_interior_uniterated();
   }
 
@@ -477,7 +684,7 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
       mp_sqr(y2, y, MP_ROUND);              // y2 = y * y;
       mp_add(z2, x2, y2, MP_ROUND);         // z2 = x2 + y2;
 
-      if (mp_greaterequal_p(z2, r2))        // if (z2 >= r2)
+      if (mp_greater_p(z2, r2))             // if (z2 > r2)
       {
         real _z2 = mp_get_d(z2, MP_ROUND);
         return mandelbrot_result_exterior(i, dwell(i, _z2));

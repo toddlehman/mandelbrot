@@ -90,14 +90,14 @@ int main (int arg_count, char *args[])
 
   if (arg_count - arg_index == 8)
   {
-    char *str_x_center             = args[arg_index+0];
-    char *str_y_center             = args[arg_index+1];
-    char *str_xy_min_size          = args[arg_index+2];
-    char *str_iter_max             = args[arg_index+3];
-    char *str_width_pixels         = args[arg_index+4];
-    char *str_height_pixels        = args[arg_index+5];
-    char *str_subsample_limit      = args[arg_index+6];
-    char *str_subsample_tolerance  = args[arg_index+7];
+    char *str_x_center              = args[arg_index+0];
+    char *str_y_center              = args[arg_index+1];
+    char *str_xy_min_size           = args[arg_index+2];
+    char *str_iter_max              = args[arg_index+3];
+    char *str_width_pixels          = args[arg_index+4];
+    char *str_height_pixels         = args[arg_index+5];
+    char *str_subsample_max_depth   = args[arg_index+6];
+    char *str_subsample_solidarity  = args[arg_index+7];
 
     // Calculate minimum precision needed to represent values.
     int mp_prec = 0;
@@ -114,15 +114,17 @@ int main (int arg_count, char *args[])
     mp_set_str(y_center, str_y_center, 10, MP_ROUND);
     mp_set_str(xy_min_size, str_xy_min_size, 10, MP_ROUND);
 
-    uint64  iter_max             = atol(str_iter_max);
-    int     width_pixels         = atoi(str_width_pixels);
-    int     height_pixels        = atoi(str_height_pixels);
-    int     subsample_limit      = atoi(str_subsample_limit);
-    real    subsample_tolerance  = atof(str_subsample_tolerance);
+    uint64  iter_max              = atol(str_iter_max);
+    int     width_pixels          = atoi(str_width_pixels);
+    int     height_pixels         = atoi(str_height_pixels);
+    int     subsample_min_depth   = 0;
+    int     subsample_max_depth   = atoi(str_subsample_max_depth);
+    real    subsample_solidarity  = atof(str_subsample_solidarity);
 
     Image *image = image_create(x_center, y_center, xy_min_size,
                                 width_pixels, height_pixels,
-                                subsample_limit, subsample_tolerance,
+                                subsample_min_depth, subsample_max_depth,
+                                subsample_solidarity,
                                 iter_max);
 
     mp_clear(x_center);

@@ -71,6 +71,54 @@ LinearRGB linear_rgb_lerp(const float32 t,
 
 
 //-----------------------------------------------------------------------------
+// INTERPOLATE LINEAR RGB VALUES
+
+public_inline_function
+LinearRGB linear_rgb_swerp(const float32 t,
+                           const LinearRGB color0,
+                           const LinearRGB color1)
+{
+  return (LinearRGB)
+  {
+    .r = swerp(t, color0.r, color1.r),
+    .g = swerp(t, color0.g, color1.g),
+    .b = swerp(t, color0.b, color1.b),
+  };
+}
+
+
+//-----------------------------------------------------------------------------
+// COMPUTE AVERAGE OF 2 RGB VALUES
+
+public_inline_function
+LinearRGB linear_rgb_average2(LinearRGB color1, LinearRGB color2)
+{
+  return (LinearRGB)
+  {
+    .r = (color1.r + color2.r) / 2,
+    .g = (color1.g + color2.g) / 2,
+    .b = (color1.b + color2.b) / 2,
+  };
+}
+
+
+//-----------------------------------------------------------------------------
+// COMPUTE AVERAGE OF 4 RGB VALUES
+
+public_inline_function
+LinearRGB linear_rgb_average4(LinearRGB color1, LinearRGB color2,
+                              LinearRGB color3, LinearRGB color4)
+{
+  return (LinearRGB)
+  {
+    .r = (color1.r + color2.r + color3.r + color4.r) / 4,
+    .g = (color1.g + color2.g + color3.g + color4.g) / 4,
+    .b = (color1.b + color2.b + color3.b + color4.b) / 4,
+  };
+}
+
+
+//-----------------------------------------------------------------------------
 // CONVERT LINEAR RGB TO DEVICE RGB
 
 #define DEVICE_GAMMA 2.2
@@ -109,8 +157,9 @@ extern_public_function
                                 LinearRGB color3, LinearRGB color4);
 
 extern_public_function
-  float32 linear_rgb_diff2(LinearRGB color1, LinearRGB color2);
+  float32 linear_rgb_solidarity2(LinearRGB color1, LinearRGB color2);
 
 extern_public_function
-  float32 linear_rgb_diff4(LinearRGB color1, LinearRGB color2,
-                           LinearRGB color3, LinearRGB color4);
+  float32 linear_rgb_solidarity4(LinearRGB color1, LinearRGB color2,
+                                 LinearRGB color3, LinearRGB color4);
+

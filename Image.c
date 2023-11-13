@@ -13,22 +13,25 @@
 public_constructor
 Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
                     int width_pixels, int height_pixels,
-                    int subsample_limit, real subsample_tolerance,
+                    int subsample_min_depth, int subsample_max_depth,
+                    real subsample_solidarity,
                     uint64 iter_max)
 {
   assert(mp_sgn(xy_min_size) > 0);
   assert(width_pixels >= 1);
   assert(height_pixels >= 1);
-  assert(subsample_limit >= 0);
-  assert(subsample_tolerance >= 0);
-  assert(subsample_tolerance <= 1);
+  assert(subsample_min_depth >= 0);
+  assert(subsample_max_depth >= 0);
+  assert(subsample_min_depth <= subsample_max_depth);
+  assert(subsample_solidarity >= 0);
+  assert(subsample_solidarity <= 1);
   assert(iter_max > 0);
 
   Image *this = mem_alloc_clear(1, sizeof(Image));
 
   int mp_prec = mp_get_prec(x_center);  // KLUDGE for now
   mp_prec += ceil(log2(MAX(width_pixels, height_pixels)));
-  mp_prec += ceil((real)subsample_limit / 2);
+  mp_prec += ceil((real)subsample_max_depth / 2);
   fprintf(stderr, "precision required:  %d bits\n", mp_prec);
   mp_prec = MAX(mp_prec, 64);
   mp_prec = 64;
@@ -96,8 +99,9 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
     mp_clear(periodicity_epsilon);
   }
 
-  this->subsample_limit = subsample_limit;
-  this->subsample_tolerance = subsample_tolerance;
+  this->subsample_min_depth = subsample_min_depth;
+  this->subsample_max_depth = subsample_max_depth;
+  this->subsample_solidarity = subsample_solidarity;
 
   this->_pixels = mem_alloc_clear(this->_di * this->_dj, sizeof(Pixel));
   this->pixels = mem_alloc_clear(this->_di, sizeof(Pixel **));
@@ -255,14 +259,16 @@ Pixel image_compute_subsampled_pixel(Image *this,
   Pixel pixel_11 = image_compute_pixel(this, i+(di/2), j+(dj/2));
 
   // Assess color variation.
-  float32 diff = linear_rgb_diff4(pixel_00.color, pixel_01.color,
-                                  pixel_10.color, pixel_11.color);
+  float32 solidarity = linear_rgb_solidarity4(pixel_00.color, pixel_01.color,
+                                              pixel_10.color, pixel_11.color);
 
   // If color variation exceeds tolerance, then subdivide each subquadrant of
   // the pixel recursively (unless the subsample depth limit has already been
   // reached).
-  if ((diff > this->subsample_tolerance) &&
-      (current_subsample_depth < this->subsample_limit))
+  bool subsample = (current_subsample_depth < this->subsample_min_depth) ||
+                   ((solidarity < this->subsample_solidarity) &&
+                    (current_subsample_depth < this->subsample_max_depth));
+  if (subsample)
   {
     pixel_00 = image_compute_subsampled_pixel(this, i, j, di/2, dj/2,
                                           pixel_00, current_subsample_depth+1);
@@ -286,6 +292,14 @@ Pixel image_compute_subsampled_pixel(Image *this,
   pixel.mr.period = -1;
   pixel.mr.iter = pixel_00.mr.iter + pixel_01.mr.iter +
                   pixel_10.mr.iter + pixel_11.mr.iter;
+
+  if (0) //current_subsample_depth > 1)  // KLUDGE
+  {
+    pixel.color = linear_rgb_lerp(solidarity,
+        palette_undefined_color(this->palette),
+        pixel.color);
+  }
+
   return pixel;
 }
 
@@ -300,19 +314,23 @@ void image_repopulate_pixel(Image *this, int i, int j)
   assert(i >= 0); assert(i < this->di);  // *Not* this->_di here.
   assert(j >= 0); assert(j < this->dj);  // *Not* this->_dj here.
 
-  float32 diff = linear_rgb_diff4(
+  float32 solidarity = linear_rgb_solidarity4(
     this->pixels[i+0][j+0].color,
     this->pixels[i+0][j+1].color,
     this->pixels[i+1][j+0].color,
     this->pixels[i+1][j+1].color
   );
 
-  if (diff > this->subsample_tolerance)
+  if (solidarity < this->subsample_solidarity)
   {
     this->pixels[i][j] = image_compute_subsampled_pixel(
       this, i, j, 1, 1,
       this->pixels[i+0][j+0],
       1);
+  }
+  else
+  {
+    //this->pixels[i][j].color = (LinearRGB) { .r = .0, .g = .0, .b = .0 };
   }
 }
 
@@ -430,8 +448,8 @@ void image_populate(Image *this)
 {
   assert(this);
 
-  bool subsampling = (this->subsample_limit > 0) &&
-                     (this->subsample_tolerance < 1);
+  bool subsampling = (this->subsample_max_depth > 0) &&
+                     (this->subsample_solidarity > 0);
 
   // Make a first pass to populate every pixel in the image, including the
   // extra row and column at the bottom and right edges if subsampling is
@@ -456,7 +474,7 @@ void image_populate(Image *this)
     image_repopulate_pixel(this, i, j);
 
 #if 0  // OBSOLETE
-    if (diff > this->subsample_tolerance)
+    if (solidarity < this->subsample_solidarity)
     {
       image_repopulate_pixel(this, i, j);
 
@@ -467,8 +485,8 @@ void image_populate(Image *this)
         this->pixels[i+1][j+1].color
       );
 
-      this->pixels[i][j].color = linear_rgb_lerp(diff,
-        color, palette_undefined_color(this->palette));
+      this->pixels[i][j].color = linear_rgb_lerp(solidarity,
+        palette_undefined_color(this->palette), color);
     }
 #endif
   }
@@ -504,6 +522,17 @@ void image_output(Image *this, bool text_format)
 
     for (int j = 0; j < this->dj; j++)
     {
+      #if 0  // FOO
+      LinearRGB c = this->pixels[i][j].color;
+      for (int n = 0; n < 1; n++)
+      {
+        c.r = swerp(c.r, 0, 1);
+        c.g = swerp(c.g, 0, 1);
+        c.b = swerp(c.b, 0, 1);
+      }
+      this->pixels[i][j].color = c;
+      #endif
+
       DeviceRGB24 color = linear_rgb_to_device_rgb24(this->pixels[i][j].color);
 
       if (text_format)
@@ -665,8 +694,9 @@ void image_output_statistics(Image *this)
 
   printf("                 Pixel size:  %d x %d\n", this->dj, this->di);
 
-  printf("          Subsampling limit:  %d\n", this->subsample_limit);
-  printf("      Subsampling tolerance:  %f\n", this->subsample_tolerance);
+  printf("      Subsampling min depth:  %d\n", this->subsample_min_depth);
+  printf("      Subsampling max depth:  %d\n", this->subsample_max_depth);
+  printf("     Subsampling solidarity:  %f\n", this->subsample_solidarity);
   printf("\n");
 
   printf("               Total pixels: %20llu\n", total_pixels);

@@ -2,7 +2,7 @@
 #  Copyright (c) 2013 by Todd S. Lehman.  All rights reserved.
 #------------------------------------------------------------------------------
 
-COMPILE =	cc -I/opt/local/include -O3 -Wall
+COMPILE =	cc -I/opt/local/include -Wall -std=c11 -O4
 LINK =		cc -L/opt/local/lib -lmpfr
 
 #------------------------------------------------------------------------------
@@ -37,6 +37,8 @@ SNAPSHOT =	snapshot.tar.gz
 default:	all
 
 all:		$(PROGS) $(SNAPSHOT)
+
+distclean:	clean
 
 clean:
 	@echo Removing $(O_FILES) $(PROGS) $(SNAPSHOT)
