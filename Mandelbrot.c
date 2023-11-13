@@ -142,6 +142,9 @@ Mandelbrot *mandelbrot_create(uint64 iter_max,
   this->stats.exterior_probes = 0;
   this->stats.exterior_probes_uniterated = 0;
 
+  this->stats.min_dwell = INFINITY;
+  this->stats.max_dwell = 0;
+
   assert(ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter) ==
          ELEMENT_COUNT(this->stats.exterior_probes_by_log2_iter));
   int k_max = ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter) - 1;
@@ -868,6 +871,12 @@ MandelbrotResult mandelbrot_compute(Mandelbrot *this,
   this->stats.total_iter += mr.iter;
   this->stats.total_probes++;
   this->stats.total_probes_uniterated += (mr.iter == 0);
+
+  if (mr.dwell < this->stats.min_dwell)
+    this->stats.min_dwell = mr.dwell;
+
+  if (mr.dwell > this->stats.max_dwell)
+    this->stats.max_dwell = mr.dwell;
 
   if (mandelbrot_result_is_interior(mr))
   {

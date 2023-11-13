@@ -62,6 +62,10 @@ typedef struct
   uint64  exterior_probes;
   uint64  exterior_probes_uniterated;
   uint64  exterior_probes_by_log2_iter[64];
+
+  // For tracking overall image complexity.
+  float64  min_dwell;
+  float64  max_dwell;
 }
 MandelbrotResultStatistics;
 

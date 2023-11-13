@@ -26,6 +26,8 @@ typedef struct
   LinearRGB  interior_iterated_aperiodic_color;
   LinearRGB  interior_uniterated_color;
   LinearRGB  dead_space_color;
+
+  real       map_zoom_level;
 }
 Palette;
 
@@ -68,7 +70,7 @@ LinearRGB palette_dead_space_color(const Palette *this)
 // FUNCTION PROTOTYPES
 
 extern_public_constructor
-  Palette *palette_create(void);
+  Palette *palette_create(real map_zoom_level);
 
 extern_public_destructor
   void palette_destroy(Palette **p_this);

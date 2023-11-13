@@ -398,7 +398,11 @@ int main (int arg_count, const char *args[])
 
   // --- Create image.
 
-  Palette *palette = palette_create();
+  // KLUDGE for MAP_WORLD
+  real map_full_size = 2.625;
+  real map_zoom_level = log2(map_full_size / this->target_camera_rho) - 2;
+
+  Palette *palette = palette_create(map_zoom_level);
 
   Camera *camera = camera_create(
     this->target_x,

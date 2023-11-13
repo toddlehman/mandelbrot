@@ -56,14 +56,14 @@ Pixel;                         // Total:  24 bytes
 public_inline_function
 bool pixel_is_undefined(const Pixel pixel)
 {
-  return !pixel.defined;
+  return !pixel.is_defined;
 }
 
 //-----------------------------------------------------------------------------
 public_inline_function
 bool pixel_is_defined(const Pixel pixel)
 {
-  return pixel.defined;
+  return pixel.is_defined;
 }
 #endif
 
@@ -86,5 +86,14 @@ public_inline_function
 bool pixel_is_mixed(const Pixel pixel)
 {
   return (pixel.interior_portion > 0.0) && (pixel.interior_portion < 1.0);
+}
+
+//-----------------------------------------------------------------------------
+public_inline_function
+bool pixel_is_black(const Pixel pixel)
+{
+  return (pixel.color.r == 0) &&
+         (pixel.color.g == 0) &&
+         (pixel.color.b == 0);
 }
 

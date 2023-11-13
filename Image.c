@@ -120,7 +120,7 @@ Image *image_create(int width_pixels, int height_pixels,
 
   // --- Allocate palette and intialize related resources.
 
-  this->palette = palette_create();
+  this->palette = palette;
 
   this->interior_filler_pixel = (Pixel)
   {
@@ -1210,16 +1210,18 @@ void image_output_statistics(const Image *this, FILE *stream)
     this->supersample? (uint64)this->_di * (uint64)this->_dj:
                        (uint64)this->di  * (uint64)this->dj;
 
-  uint64 total_pixels =
-                       (uint64)this->di  * (uint64)this->dj;
+  uint64 total_pixels = (uint64)this->di  * (uint64)this->dj;
 
+  bool all_pixels_black = true;
   float64 total_interior_pixels = 0;
   float64 total_exterior_pixels = 0;
   for (int i = 0; i < this->di; i++)
   for (int j = 0; j < this->dj; j++)
   {
-    total_interior_pixels +=      this->pixels[i][j].interior_portion;
-    total_exterior_pixels += (1 - this->pixels[i][j].interior_portion);
+    const Pixel pixel = this->pixels[i][j];
+    all_pixels_black &= pixel_is_black(pixel);
+    total_interior_pixels += (0 + pixel.interior_portion);
+    total_exterior_pixels += (1 - pixel.interior_portion);
   }
 
   if (this->supersample)
@@ -1315,6 +1317,30 @@ void image_output_statistics(const Image *this, FILE *stream)
   fprintf(stream,
           "         Avg. probes per pixel: %23.3f\n",
           ratio(stats->total_probes, total_pixels_including_overscan));
+
+  fprintf(stream, "\n");
+
+  if (stats->min_dwell == INFINITY)
+    fprintf(stream,
+            "                 Minimum dwell: %19s\n",
+            "inf");
+  else
+    fprintf(stream,
+            "                 Minimum dwell: %23.3f\n",
+            stats->min_dwell);
+
+  if (stats->max_dwell == INFINITY)
+    fprintf(stream,
+            "                 Maximum dwell: %19s\n",
+            "inf");
+  else
+    fprintf(stream,
+            "                 Maximum dwell: %23.3f\n",
+            stats->max_dwell);
+
+  fprintf(stream,
+          "              All pixels black: %19s\n",
+          all_pixels_black? "yes":"no");
 
   fprintf(stream, "\n");
 

@@ -9,9 +9,11 @@
 // ALLOCATE COLOR PALETTE
 
 public_constructor
-Palette *palette_create(void)
+Palette *palette_create(const real map_zoom_level)
 {
   Palette *this = mem_alloc_clear(1, sizeof(*this));
+
+  this->map_zoom_level = map_zoom_level;
 
   const int max_exterior_count = 20;
   const int max_sky_count = 20;
@@ -45,23 +47,41 @@ Palette *palette_create(void)
   this->exterior_locations[i] = 0.90;
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.42, 0.63 };  // Teal
 #elif 1
+
+
   // Really great all-purpose palette.  Finely tuned.
   this->exterior_locations[i] = 0.00;
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.15, 0.85 };  // Blue
   //this->exterior_colors[i++] = (LinearRGB) { 0.10, 0.15, 0.95 };  // Blue (too bright)
+
+
   this->exterior_locations[i] = 0.10;
   this->exterior_colors[i++] = (LinearRGB) { 0.30, 0.00, 0.40 };  // Purple
+
+
   this->exterior_locations[i] = 0.20;
   this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
+
+
 //this->exterior_locations[i] = 0.50;  // retiring this value
-  this->exterior_locations[i] = 0.30;  // new value -- better?
+  this->exterior_locations[i] = 0.40;  // new value -- better?
   this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
+
+
 //this->exterior_locations[i] = 0.80;  // retiring this value
+//this->exterior_locations[i] = 0.60;  // new value -- better?
+//this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.70, 0.02 };  // Green
+//this->exterior_locations[i] = 0.70;  // new value -- better?
   this->exterior_locations[i] = 0.60;  // new value -- better?
-  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.70, 0.02 };  // Green
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.65, 0.02 };  // Green
+
+
 //this->exterior_locations[i] = 0.90;  // retiring this value
-  this->exterior_locations[i] = 0.80;  // new value -- better?
+//this->exterior_locations[i] = 0.80;  // new value -- better?
+  this->exterior_locations[i] = 0.85;  // new value -- better?
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.40, 0.60 };  // Teal
+
+
 #elif 0
   // Simple, excellent monochrome palette showing lots and lots of detail.
   // A bit boring, though, since there's no color.
@@ -260,9 +280,13 @@ LinearRGB palette_compute_mandelbrot_color(const Palette *this, real location)
 
   if (location < 0)
   {
-    if (location < -1) location = -1;
-    location += 1;
-    location = swerp(location, 0, 1);
+  #if 0  // Used only for debugging the map-zoom dampening to black
+    if (location <= -1) return (LinearRGB) { .01,.01,.01 };  // KLUDGE
+  #endif
+
+    if (location < -1) location = -1;  // Clamp to [-1,0)
+    location += 1;                     // Remap to [0,1)
+    location = swerp(location, 0, 1);  // Remap within [0,1)
     return linear_rgb_lerp(location,
                            (LinearRGB) { 0, 0, 0 },
                            this->exterior_colors[0]); 
@@ -321,7 +345,8 @@ LinearRGB palette_compute_sky_color(const Palette *this, real location)
 // MAP MANDELBROT DWELL TO COLOR LOCATION
 
 private_method
-real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
+real palette_map_dwell_to_color_location(const Palette *this,
+                                         const float64 dwell)
 {
   float64 f = dwell;
 
@@ -355,19 +380,15 @@ real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
     f = pow(f, power);
     f = fmod(f, cycle) / cycle;
 
-  #elif 1  // Square root
+  #elif 0  // Square root (old version without zoom-level dampening to black)
 
-    // Note to self:  This might be best for a gigapixel or terapixel map.
-    // This is what I used (with a cycle of 100) when I generated the
-    // 24-gigapixel map in October 2013.
+    // Note to self:  This apperas to be best for a gigapixel or terapixel map.
 
     //const float64 base = 400, cycle = 240;   // Nice but too tame.
     //const float64 base = 300, cycle = 180;   // Nicer in some cases.
     //const float64 base = 200, cycle = 120;   // Pretty good overall.
     const float64 base = 200, cycle = 100;   // Even better for map.
 
-    //if (f < 0) f = 0;
-    //assert(f >= 0);
     if (f < 0)
     {
       ;
@@ -375,6 +396,36 @@ real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
     else if (f < base)
     {
       f = f / base;
+    }
+    else
+    {
+      f -= base;
+      f = pow(f, 0.5);
+      f = fmod(f, cycle) / cycle;
+    }
+
+  #elif 1  // Square root (new version with zoom-level dampening to black)
+
+    // Note to self:  This apperas to be best for a gigapixel or terapixel map.
+    const float64 base = 200, cycle = 100;
+    const float64 black = 1.0 * this->map_zoom_level;
+    const float64 blue  = 1.5 * this->map_zoom_level;
+
+    if (f < 0)
+    {
+      ;
+    }
+    else if (f < black)
+    {
+      f = -1;
+    }
+    else if (f < blue)
+    {
+      f = lerp(unlerp(f, black, blue), -1, 0);
+    }
+    else if (f < base)
+    {
+      f = lerp(unlerp(f, blue, base), 0, 1);
     }
     else
     {
