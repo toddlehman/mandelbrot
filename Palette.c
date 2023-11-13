@@ -14,12 +14,19 @@ Palette *palette_create(void)
   Palette *this = mem_alloc_clear(1, sizeof(*this));
 
   const int max_exterior_count = 20;
+  const int max_sky_count = 20;
 
   this->exterior_locations = mem_alloc_clear(max_exterior_count + 1,
     sizeof(*(this->exterior_locations)));
 
   this->exterior_colors = mem_alloc_clear(max_exterior_count + 1,
     sizeof(*(this->exterior_colors)));
+
+  this->sky_locations = mem_alloc_clear(max_sky_count + 1,
+    sizeof(*(this->sky_locations)));
+
+  this->sky_colors = mem_alloc_clear(max_sky_count + 1,
+    sizeof(*(this->sky_colors)));
 
   int i = 0;
 #if 0
@@ -172,8 +179,25 @@ Palette *palette_create(void)
     //(LinearRGB) { 0.02, 0.02, 0.02};  // Dark gray (for debugging)
 
   this->dead_space_color =
-    //(LinearRGB) { 0.0, 0.0, 0.0 };  // Black
-    (LinearRGB) { 0.4, 0.7, 1.0 };  // Sky blue
+    (LinearRGB) { 0.0, 0.0, 0.0 };  // Black
+
+
+  i = 0;
+  this->sky_locations[i] = 0.00;
+  this->sky_colors[i++] = (LinearRGB) { 0.00, 0.00, 0.00 };  // Space black
+  this->sky_locations[i] = 0.60;
+  this->sky_colors[i++] = (LinearRGB) { 0.00, 0.05, 0.60 };  // Deep sky blue
+  this->sky_locations[i] = 0.70;
+  this->sky_colors[i++] = (LinearRGB) { 0.02, 0.15, 0.70 };  // Medium sky blue
+  this->sky_locations[i] = 0.80;
+  this->sky_colors[i++] = (LinearRGB) { 0.10, 0.30, 0.80 };  // Medium sky blue
+  this->sky_locations[i] = 0.90;
+  this->sky_colors[i++] = (LinearRGB) { 0.25, 0.50, 0.90 };  // Medium sky blue
+  this->sky_locations[i] = 1.00;
+  this->sky_colors[i++] = (LinearRGB) { 0.40, 0.70, 1.00 };  // Light sky blue
+  this->sky_count = i;
+  assert(this->sky_count < max_sky_count);
+
 
   #if 0
   printf("Color palette:\n");
@@ -205,19 +229,23 @@ void palette_destroy(Palette **p_this)
   assert(this);
   assert(this->exterior_locations);
   assert(this->exterior_colors);
+  assert(this->sky_locations);
+  assert(this->sky_colors);
 
   mem_dealloc(&this->exterior_locations);
   mem_dealloc(&this->exterior_colors);
+  mem_dealloc(&this->sky_locations);
+  mem_dealloc(&this->sky_colors);
 
   mem_dealloc(p_this);
 }
 
 
 //-----------------------------------------------------------------------------
-// COMPUTE COLOR
+// COMPUTE MANDELBROT SET COLOR
 
 private_method
-LinearRGB palette_compute_color(const Palette *this, real location)
+LinearRGB palette_compute_mandelbrot_color(const Palette *this, real location)
 {
   assert(this);
   //assert((location >= 0) && (location <= 1));
@@ -240,7 +268,7 @@ LinearRGB palette_compute_color(const Palette *this, real location)
   for (int i = 0; i < this->exterior_count; i++)
   {
     if ((location >= this->exterior_locations[i]) &&
-        (location <  this->exterior_locations[i+1]))
+        (location <= this->exterior_locations[i+1]))
     {
       location = unlerp(location,
                         this->exterior_locations[i],
@@ -249,6 +277,36 @@ LinearRGB palette_compute_color(const Palette *this, real location)
       return linear_rgb_lerp(location,
                              this->exterior_colors[i],
                              this->exterior_colors[i+1]);
+    }
+  }
+
+  return this->undefined_color;
+}
+
+
+//-----------------------------------------------------------------------------
+// COMPUTE SKY COLOR
+
+private_method
+LinearRGB palette_compute_sky_color(const Palette *this, real location)
+{
+  assert(this);
+
+       if (location < 0) location = 0;
+  else if (location > 1) location = 1;
+
+  for (int i = 0; i < this->sky_count; i++)
+  {
+    if ((location >= this->sky_locations[i]) &&
+        (location <= this->sky_locations[i+1]))
+    {
+      location = unlerp(location,
+                        this->sky_locations[i],
+                        this->sky_locations[i+1]);
+
+      return linear_rgb_lerp(location,
+                             this->sky_colors[i],
+                             this->sky_colors[i+1]);
     }
   }
 
@@ -343,7 +401,7 @@ LinearRGB palette_color_from_mandelbrot_result(const Palette *this,
     if (mandelbrot_result_is_exterior(mr))
     {
       float64 location = palette_map_dwell_to_color_location(this, mr.dwell);
-      return palette_compute_color(this, location);
+      return palette_compute_mandelbrot_color(this, location);
     }
     else if (mandelbrot_result_is_interior(mr))
     {
@@ -370,3 +428,17 @@ LinearRGB palette_color_from_mandelbrot_result(const Palette *this,
 
 
 //-----------------------------------------------------------------------------
+// COMPUTE COLOR FROM SKY COEFFICIENT
+
+public_method
+LinearRGB palette_color_from_sky_coefficient(const Palette *this,
+                                             const float64 sky_coefficient)
+{
+  assert(this);
+
+  return palette_compute_sky_color(this, sky_coefficient);
+}
+
+
+//-----------------------------------------------------------------------------
+

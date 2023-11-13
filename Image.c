@@ -277,7 +277,8 @@ float32 image_compute_displacement_3d(const Image *this,
 // COMPUTE NON-SUPERSAMPLED PIXEL
 
 private_method
-Pixel image_compute_pixel(const Image *this, real i, real j)
+Pixel image_compute_pixel(const Image *this, real i, real j,
+                          bool is_known_interior)
 {
   assert(this);
 
@@ -301,8 +302,8 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
   real uve = (2.0 / (real)dij_max) / pow(2, this->supersample_max_depth);
 
   // Map viewport coordinates to Argand plane coordinates.
-  real sky_angle;
-  if (camera_get_argand_point(this->camera, u, v, &x, &y, &sky_angle))
+  real atmo_scat;
+  if (camera_get_argand_point(this->camera, u, v, &x, &y, &atmo_scat))
   {
     // Determine subpixel size around point (u,v) in the viewport.
     mp_real e, e2, xe, ye;
@@ -312,7 +313,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
     mp_init2(ye, this->mandelbrot->conf.mp_prec);
 
     mp_set_d(e, 1e-6);  // Maximum possible epsilon.
-    if (camera_get_argand_point(this->camera, u - uve, v, &xe, &ye, &sky_angle))
+    if (camera_get_argand_point(this->camera, u - uve, v, &xe, &ye, NULL))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -320,7 +321,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
       if (mp_less_p(e2, e))               // if (e2 < e)
         mp_set(e, e2);                    //   e = e2;
     }
-    if (camera_get_argand_point(this->camera, u + uve, v, &xe, &ye, &sky_angle))
+    if (camera_get_argand_point(this->camera, u + uve, v, &xe, &ye, NULL))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -328,7 +329,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
       if (mp_less_p(e2, e))               // if (e2 < e)
         mp_set(e, e2);                    //   e = e2;
     }
-    if (camera_get_argand_point(this->camera, u, v - uve, &xe, &ye, &sky_angle))
+    if (camera_get_argand_point(this->camera, u, v - uve, &xe, &ye, NULL))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -336,7 +337,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
       if (mp_less_p(e2, e))               // if (e2 < e)
         mp_set(e, e2);                    //   e = e2;
     }
-    if (camera_get_argand_point(this->camera, u, v + uve, &xe, &ye, &sky_angle))
+    if (camera_get_argand_point(this->camera, u, v + uve, &xe, &ye, NULL))
     {
       mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
       mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
@@ -347,27 +348,24 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
     mp_sqrt(e, e);
 
     // Now compute pixel.
-    mr = mandelbrot_compute(this->mandelbrot, x, y, e);
+    if (is_known_interior)
+      mr = mandelbrot_result_interior_uniterated();
+    else
+      mr = mandelbrot_compute(this->mandelbrot, x, y, e);
     pixel.color = palette_color_from_mandelbrot_result(this->palette, mr);
     pixel.displacement_3d = image_compute_displacement_3d(this, x, y, mr);
     pixel.interior_portion = mandelbrot_result_is_interior(mr)? 1.0 : 0.0;
     pixel.is_defined = true;
     pixel.is_interior_periodic = mandelbrot_result_is_interior_periodic(mr);
 
-    // Apply fading "fog" based on distance.  This is a quick hack KLUDGE.
-    if (mandelbrot_result_is_exterior(mr))
+    // Apply fading "fog".  This is a quick hack KLUDGE.
     {
-      //real d = sqrt(pow(mp_get_d(x) - mp_get_d(this->camera->camera_x), 2) +
-      //              pow(mp_get_d(y) - mp_get_d(this->camera->camera_y), 2))
-      //           / (this->camera->target_camera_rho);
-      real d = sqrt(pow(mp_get_d(x) - mp_get_d(this->camera->camera_x), 2) +
-                    pow(mp_get_d(y) - mp_get_d(this->camera->camera_y), 2) +
-                    pow(0           - mp_get_d(this->camera->camera_z), 2));
-      real t = atan(d) / (PI / 2);
+      real f = atmo_scat;
+      if (mandelbrot_result_is_interior(mr))
+        f = pow(f, 3);
       pixel.color = linear_rgb_lerp(
-        pow(t, 12) * 0.7,
+        f,
         pixel.color,
-      //(LinearRGB) { 0.50, 0.60, 0.65 }  // Slightly sky-bluish gray fog
         (LinearRGB) { 0.60, 0.60, 0.60 }  // Gray fog
       );
     }
@@ -380,20 +378,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
   else
   {
     mr = mandelbrot_result_exterior_uniterated(0);
-    #if 0  // OBSOLETE
-    pixel.color = palette_dead_space_color(this->palette);
-    #endif
-
-    // This is a big fat KLUDGE.
-    {
-      real f = sky_angle / (PI / 2);
-      pixel.color = linear_rgb_lerp(
-        pow(f, 8),
-        (LinearRGB) { 0.00, 0.05, 0.60 },  // Deep sky blue
-        (LinearRGB) { 0.40, 0.70, 1.00 }   // Light sky blue
-      );
-    }
-
+    pixel.color = palette_color_from_sky_coefficient(this->palette, atmo_scat);
     pixel.displacement_3d = 0;
     pixel.interior_portion = 0;
     pixel.is_defined = true;
@@ -442,9 +427,9 @@ Pixel image_compute_supersampled_pixel(const Image *this,
   assert(pixel_00.is_defined);
 
   // Calculate intermediate subpixel values.
-  Pixel pixel_01 = image_compute_pixel(this, i,        j+(dj/2));
-  Pixel pixel_10 = image_compute_pixel(this, i+(di/2), j);
-  Pixel pixel_11 = image_compute_pixel(this, i+(di/2), j+(dj/2));
+  Pixel pixel_01 = image_compute_pixel(this, i,        j+(dj/2), false);
+  Pixel pixel_10 = image_compute_pixel(this, i+(di/2), j,        false);
+  Pixel pixel_11 = image_compute_pixel(this, i+(di/2), j+(dj/2), false);
 
   // Adjust required solidarity based on supersampling depth.  The deeper we go
   // in supersampling, the sloppier we allow the results to be.  This is
@@ -542,7 +527,7 @@ void image_populate_pixel(Image *this, int i, int j,
 
   if (!pixel->is_defined)
   {
-    *pixel = image_compute_pixel(this, i, j);
+    *pixel = image_compute_pixel(this, i, j, false);
     assert(pixel->is_defined);
   }
 
@@ -559,7 +544,8 @@ void image_populate_pixel(Image *this, int i, int j,
       int dsj = (1 << this->supersample_interior_max_depth);
       for (int sj = 1; all_interior && (sj < dsj); sj++)  // (Not sj = 0)
       {
-        Pixel subpixel = image_compute_pixel(this, i, j+(real)sj/(real)dsj);
+        Pixel subpixel = image_compute_pixel(
+                           this, i, j+(real)sj/(real)dsj, false);
         //all_interior &= subpixel.is_interior_periodic;
         all_interior &= pixel_is_interior(subpixel);
       }
@@ -571,7 +557,8 @@ void image_populate_pixel(Image *this, int i, int j,
       int dsi = (1 << this->supersample_interior_max_depth);
       for (int si = 1; all_interior && (si < dsi); si++)  // (Not si = 0)
       {
-        Pixel subpixel = image_compute_pixel(this, i+(real)si/(real)dsi, j);
+        Pixel subpixel = image_compute_pixel(
+                           this, i+(real)si/(real)dsi, j, false);
         //all_interior &= subpixel.is_interior_periodic;
         all_interior &= pixel_is_interior(subpixel);
       }
@@ -700,7 +687,8 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
     for (int j = j0 + 1; j <= j1 - 1; j++)
     {
       assert(!this->pixels[i][j].is_defined);
-      this->pixels[i][j] = this->interior_filler_pixel;
+      //this->pixels[i][j] = this->interior_filler_pixel;
+      this->pixels[i][j] = image_compute_pixel(this, (real)i, (real)j, true);
     }
   }
   else if ((di >= 3) || (dj >= 3))

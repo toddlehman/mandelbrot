@@ -17,6 +17,10 @@ typedef struct
   float64    *exterior_locations;
   LinearRGB  *exterior_colors;
 
+  uint32     sky_count;
+  float64    *sky_locations;
+  LinearRGB  *sky_colors;
+
   LinearRGB  undefined_color;
   LinearRGB  interior_iterated_periodic_color;
   LinearRGB  interior_iterated_aperiodic_color;
@@ -72,3 +76,6 @@ extern_public_destructor
 extern_public_method
   LinearRGB palette_color_from_mandelbrot_result(const Palette *this,
                                                  const MandelbrotResult mr);
+extern_public_method
+  LinearRGB palette_color_from_sky_coefficient(const Palette *this,
+                                               const float64 sky_coefficient);

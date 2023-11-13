@@ -175,6 +175,7 @@ void camera_sphere_to_argand(const Camera *this, Vector3 s, real *a, real *b)
 //
 // ENTRY:  point specifies the starting point of the ray.
 //         ray specifies the direction of the ray.
+//         sphere_radius specifies the radius of the sphere.
 //
 // EXIT:   Returns a result code.
 //          true   *sphere contains the point on the unit sphere closest to the
@@ -188,7 +189,8 @@ void camera_sphere_to_argand(const Camera *this, Vector3 s, real *a, real *b)
 private_method
 bool camera_intersect_ray_with_sphere(const Camera *this,
                                       Vector3 point, Vector3 ray,
-                                      Vector3 *sphere)
+                                      real sphere_radius,
+                                      Vector3 *sphere_point)
 {
   assert(this);
 
@@ -196,7 +198,7 @@ bool camera_intersect_ray_with_sphere(const Camera *this,
 
   real radicand = pow(vector3_dot_product(ray, point), 2)
                 - vector3_dot_product(point, point)
-                + 1;
+                + pow(sphere_radius, 2);
 
   if (radicand >= 0)
   {
@@ -205,23 +207,90 @@ bool camera_intersect_ray_with_sphere(const Camera *this,
 
     if (distance >= 0)
     {
-      *sphere = vector3_sum(point, vector3_scaled(ray, distance));
-      // Verify that the point is indeed on unit sphere.
-      assert(fabs(vector3_magnitude(*sphere) - 1) < 0.000001);
+      *sphere_point = vector3_sum(point, vector3_scaled(ray, distance));
+      // Verify that the point is indeed on the sphere.
+      assert(fabs(vector3_magnitude(*sphere_point) - sphere_radius) < 0.000001);
       return true;
     }
     else
     {
-      *sphere = (Vector3) { .x = 0, .y = 0, .z = 0 };
+      *sphere_point = (Vector3) { .x = 0, .y = 0, .z = 0 };
       return false;
     }
   }
   else
   {
-    *sphere = (Vector3) { .x = 0, .y = 0, .z = 0 };
+    *sphere_point = (Vector3) { .x = 0, .y = 0, .z = 0 };
     return false;
   }
 }
+
+
+//-----------------------------------------------------------------------------
+// DISTANCE THROUGH SPHERE
+//
+// ENTRY:  point specifies the starting point of the ray.
+//         ray specifies the direction of the ray.
+//         sphere_radius specifies the radius of the sphere.
+//
+// EXIT:   Returns the distance the ray travels through the sphere.
+
+private_method
+real camera_distance_through_sphere(const Camera *this,
+                                    Vector3 point, Vector3 ray,
+                                    real sphere_radius)
+{
+  assert(this);
+
+  ray = vector3_normalized(ray);  // Convert to unit vector.
+
+  real radicand = pow(vector3_dot_product(ray, point), 2)
+                - vector3_dot_product(point, point)
+                + pow(sphere_radius, 2);
+
+  if (radicand >= 0)
+  {
+    real distance_near = - vector3_dot_product(ray, point) - sqrt(radicand);
+    real distance_far  = - vector3_dot_product(ray, point) + sqrt(radicand);
+
+    if (distance_near >= 0)
+    {
+      return distance_far - distance_near;
+    }
+    else
+    {
+      return (distance_far >= 0)? distance_far : 0;
+    }
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+
+#if 0  // OBSOLETE
+//-----------------------------------------------------------------------------
+// COMPUTE DISTANCE TO LINE FROM ORIGIN
+//
+// Arithmetic derived from:
+//   <http://geomalgorithms.com/a02-_lines.html>
+
+private_method
+real camera_distance_to_line_from_origin(const Camera *this,
+                                         Vector3 point, Vector3 ray)
+{
+  assert(this);
+
+  real c1 = vector3_dot_product(vector3_negated(point), ray);
+  real c2 = vector3_dot_product(ray, ray);
+
+  Vector3 closest = vector3_sum(point, vector3_scaled(ray, c1/c2));
+
+  real distance = vector3_magnitude(closest);
+  return distance;
+}
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -231,15 +300,16 @@ bool camera_intersect_ray_with_sphere(const Camera *this,
 //          [-1,+1] for each axis.
 //
 // EXIT:   Returns a success code.
-//         If successful, then *x and *y contain the Argand plane coordinates.
-//         Otherwise, *sky_angle contains the angle in radians of the cast ray
-//           as it hits the sky (0 is straight up; π/2 radians is the horizon).
+//           true   *x and *y contain the Argand plane coordinates.
+//           false  *x and *y are undefined; the point is outside the plane.
+//         *atmo_scat contains the distance traveled through atmosphere (valid
+//           regardless of success code), or NULL if this value is unneeded.
 //
 public_method
 bool camera_get_argand_point(const Camera *this,
                              real u, real v,
                              mp_real *x, mp_real *y,
-                             real *sky_angle)
+                             real *atmo_scat)
 {
   assert(this); assert(x); assert(y);
 
@@ -310,8 +380,11 @@ bool camera_get_argand_point(const Camera *this,
     //        (double)u, (double)v);
 
     // This is a big fat KLUDGE.
+    // FIXME:  This is probably no longer workable for flat world.
     real xy = sqrt((ray.x * ray.x) + (ray.y * ray.y));
-    *sky_angle = (PI / 2) - atan(ray.z / xy);
+    unless (atmo_scat == NULL)
+      *atmo_scat = (PI / 2) - atan(ray.z / xy);
+
     return false;
   }
 
@@ -327,13 +400,58 @@ bool camera_get_argand_point(const Camera *this,
   ray = vector3_rotated_x(ray, this->target_camera_phi);
   ray = vector3_rotated_z(ray, this->target_camera_theta);
 
+  real globe_radius = 1.00;
+  real atmosphere_radius = 1.05;
+  real max_atmo_dist = 0.640308;  // KLUDGE from observation
+
   Vector3 s;
-  if (camera_intersect_ray_with_sphere(this, position, ray, &s))
+  if (camera_intersect_ray_with_sphere(this, position, ray, globe_radius, &s))
   {
     real a, b;
     camera_sphere_to_argand(this, s, &a, &b);
     mp_set_d(*x, a);
     mp_set_d(*y, b);
+
+    unless (atmo_scat == NULL)
+    {
+      real camera_radius = vector3_magnitude(position);
+
+      real f;
+      if (camera_radius > atmosphere_radius)
+      {
+        // Outside the atmospheric radius.
+        Vector3 sa;
+        (void)camera_intersect_ray_with_sphere(this, position, ray,
+                                               atmosphere_radius, &sa);
+        real d = vector3_magnitude(vector3_difference(sa, s));
+        f = d / (max_atmo_dist / 2);
+      }
+      else
+      {
+        // Inside the atmospheric radius.
+        real d = vector3_magnitude(vector3_difference(position, s));
+        real f1 = d / (max_atmo_dist / 2);
+
+        real f2 = atan(d / this->target_camera_rho) / (PI / 2);
+        f2 = pow(f2, 4) * 0.5;
+
+        f = lerp(unlerp(camera_radius, globe_radius, atmosphere_radius),
+                        f2, f1);
+      }
+      if (f < 0) f = 0;  // FIXME:  Use a clamp function instead.
+      if (f > 1) f = 1;
+
+      // Apply a power curve to the computed atmospheric coefficient.  This is
+      // just a tuning value.
+      real foo = lerp(unlerp(camera_radius, globe_radius, atmosphere_radius),
+                      1.0, 2.0);
+      if (foo < 1.0) foo = 1.0;  // FIXME:  Use a clamp function instead.
+      if (foo > 2.0) foo = 2.0;
+      f = pow(f, foo);
+
+      *atmo_scat = f;
+    }
+
     //fprintf(stderr, "(%+.3f,%+.3f) --> (%+.3f,%+.3f,%+.3f)+(%+.3f,%+.3f,%+.3f) --> (%+.3f,%+.3f,%+.3f) --> (%+.3f,%+.3f)\n",
     //        (double)u, (double)v,
     //        (double)position.x, (double)position.y, (double)position.z,
@@ -344,11 +462,49 @@ bool camera_get_argand_point(const Camera *this,
   }
   else
   {
-    //fprintf(stderr, "(%+.3f,%+.3f) --> (%+.3f,%+.3f,%+.3f)+(%+.3f,%+.3f,%+.3f) --> space\n",
-    //        (double)u, (double)v,
-    //        (double)position.x, (double)position.y, (double)position.z,
-    //        (double)ray.x, (double)ray.y, (double)ray.z);
-    *sky_angle = 0;
+    unless (atmo_scat == NULL)
+    {
+      real d = camera_distance_through_sphere(this, position, ray,
+                                              atmosphere_radius);
+      real camera_radius = vector3_magnitude(position);
+
+      // Temper the atmospheric calculation by the distance light travels
+      // through the atmosphere.
+      real f;
+      if (camera_radius > atmosphere_radius)
+      {
+        // Outside the atmospheric radius.
+        f = d / max_atmo_dist;
+      }
+      else
+      {
+        // Inside the atmospheric radius.  Temper the effective maximum
+        // atmospheric distance by the current altitude.
+        real mad = lerp(unlerp(camera_radius, globe_radius, atmosphere_radius),
+                        max_atmo_dist / 2,
+                        max_atmo_dist);
+        f = d / mad;
+      }
+      if (f < 0) f = 0;  // FIXME:  Use a clamp function instead.
+      if (f > 1) f = 1;
+
+      // Apply a power curve to the computed atmospheric coefficient.
+      real foo = lerp(unlerp(camera_radius, globe_radius, atmosphere_radius),
+                      0.5, 4.0);
+      if (foo < 0.5) foo = 0.5;  // FIXME:  Use a clamp function instead.
+      if (foo > 4.0) foo = 4.0;
+      f = pow(f, foo);
+      f = pow(f, 2);  // Why?
+
+      *atmo_scat = f;
+
+      //fprintf(stderr, "(%+.3f,%+.3f) --> (%+.3f,%+.3f,%+.3f)+(%+.3f,%+.3f,%+.3f) --> atmo_scat %f\n",
+      //        (double)u, (double)v,
+      //        (double)position.x, (double)position.y, (double)position.z,
+      //        (double)ray.x, (double)ray.y, (double)ray.z,
+      //        (double)*atmo_scat);
+    }
+
     return false;
   }
 
