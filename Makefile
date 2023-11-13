@@ -2,7 +2,7 @@
 #  Copyright (c) 2013 by Todd S. Lehman.  All rights reserved.
 #------------------------------------------------------------------------------
 
-COMPILE =	cc -I/opt/local/include -Isrc -O3 -Wall
+COMPILE =	cc -I/opt/local/include -O3 -Wall
 LINK =		cc -L/opt/local/lib -lmpfr
 
 #------------------------------------------------------------------------------

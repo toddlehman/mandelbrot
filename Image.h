@@ -5,6 +5,7 @@
 #import "Common.h"
 #import "Pixel.h"
 #import "Palette.h"
+#import "Mandelbrot.h"
 
 
 //-----------------------------------------------------------------------------
@@ -29,6 +30,8 @@ typedef struct
 
   int      subsample_scale;
   real     subsample_tolerance;
+
+  Mandelbrot  *mandelbrot;
 }
 Image;
 
@@ -36,14 +39,14 @@ Image;
 //-----------------------------------------------------------------------------
 // FUNCTION PROTOTYPES
 
-extern_public_method
-Image *image_alloc(real x_center, real y_center, real x_size,
-                   uint64 iter_max,
-                   int pixel_width, int pixel_height,
-                   int subsample_scale, real subsample_tolerance);
+extern_public_constructor
+Image *image_create(real x_center, real y_center, real x_size,
+                    uint64 iter_max,
+                    int pixel_width, int pixel_height,
+                    int subsample_scale, real subsample_tolerance);
 
-extern_public_method
-void image_dealloc(Image **this);
+extern_public_destructor
+void image_destroy(Image **this);
 
 extern_public_method
 void image_populate(Image *this);
@@ -53,3 +56,4 @@ void image_output(Image *this, bool text_format);
 
 extern_public_method
 void image_output_statistics(Image *this);
+

@@ -8,8 +8,8 @@
 //-----------------------------------------------------------------------------
 // ALLOCATE COLOR PALETTE
 
-public_method
-Palette *palette_alloc(void)
+public_constructor
+Palette *palette_create(void)
 {
   Palette *this = mem_alloc_clear(1, sizeof(*this));
 
@@ -64,8 +64,8 @@ Palette *palette_alloc(void)
 //-----------------------------------------------------------------------------
 // DEALLOCATE PALETTE
 
-public_method
-void palette_dealloc(Palette **p_this)
+public_destructor
+void palette_destroy(Palette **p_this)
 {
   assert(p_this);
   Palette *this = *p_this;

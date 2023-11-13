@@ -20,17 +20,17 @@ DeepReal;
 //-----------------------------------------------------------------------------
 // FUNCTION PROTOTYPES
 
-extern_public_method
-  DeepReal *dr_alloc(int bits_deep);
+extern_public_constructor
+  DeepReal *dr_create(int bits_deep);
 
-extern_public_method
-  DeepReal *dr_alloc_int32(int bits_deep, int32 n);
+extern_public_constructor
+  DeepReal *dr_create_int32(int bits_deep, int32 n);
 
-extern_public_method
-  DeepReal *dr_alloc_float64(int bits_deep, float64 x);
+extern_public_constructor
+  DeepReal *dr_create_float64(int bits_deep, float64 x);
 
-extern_public_method
-  void dr_dealloc(DeepReal **p_this);
+extern_public_destructor
+  void dr_destroy(DeepReal **p_this);
 
 extern_public_method
   void dr_print_debug(DeepReal *this);

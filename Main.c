@@ -84,9 +84,9 @@ int main (int arg_count, char *args[])
     int     subsample_scale      = atoi(args[arg_index+6]);
     real    subsample_tolerance  = 0.5;
 
-    Image *image = image_alloc(x_center, y_center, x_size, iter_max,
-                               pixel_width, pixel_height,
-                               subsample_scale, subsample_tolerance);
+    Image *image = image_create(x_center, y_center, x_size, iter_max,
+                                pixel_width, pixel_height,
+                                subsample_scale, subsample_tolerance);
     image_populate(image);
 
     if (output_statistics)
@@ -94,7 +94,7 @@ int main (int arg_count, char *args[])
     else
       image_output(image, output_text_format);
 
-    image_dealloc(&image);
+    image_destroy(&image);
   }
   else
   {

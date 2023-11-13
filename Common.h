@@ -28,25 +28,33 @@
 // header file).  For easier reading, the following are used in this program
 // instead.
 //
-#define  private_static            static
+#define  private_static             static
 #define  public_static
 
-#define  private_const             static const
-#define  public_const              static const
+#define  private_const              static const
+#define  public_const               static const
 
-#define  private_function          static
+#define  private_function           static
 #define  public_function
-#define  extern_public_function    extern
+#define  extern_public_function     extern
 
-#define  private_method            static
+#define  private_constructor        static
+#define  public_constructor
+#define  extern_public_constructor  extern
+
+#define  private_destructor         static
+#define  public_destructor
+#define  extern_public_destructor   extern
+
+#define  private_method             static
 #define  public_method  
-#define  extern_public_method      extern
+#define  extern_public_method       extern
 
-#define  private_inline_function   static inline
-#define  public_inline_function    static inline
+#define  private_inline_function    static inline
+#define  public_inline_function     static inline
 
-#define  private_inline_method     static inline
-#define  public_inline_method      static inline
+#define  private_inline_method      static inline
+#define  public_inline_method       static inline
 
 
 //-----------------------------------------------------------------------------
@@ -103,27 +111,27 @@ typedef  double  float64;
 // LINEAR INTERPOLATION
 
 public_inline_function
-double lerp(double t, double x0, double x1)
+real lerp(real t, real x0, real x1)
 {
-  //double x = ((1 - t) * x0) + (t * x1);
-  double x = x0 + (t * (x1 - x0));
+  //real x = ((1 - t) * x0) + (t * x1);
+  real x = x0 + (t * (x1 - x0));
   return x;
 }
 
 public_inline_function
-double unlerp(double x, double x0, double x1)
+real unlerp(real x, real x0, real x1)
 {
-  double t = (x - x0) / (x1 - x0);
+  real t = (x - x0) / (x1 - x0);
   return t;
 }
 
 public_inline_function
-double swerp(double t, double x0, double x1)
+real swerp(real t, real x0, real x1)
 {
   t = PI * t;        // Map [0,1] to [0,π] (i.e., 0° to 180°).
   t = cos(t);        // Map [0,π] to [1,-1].
   t = (1 - t) / 2;   // Map [1,-1] to [0,1].
-  double x = lerp(t, x0, x1);
+  real x = lerp(t, x0, x1);
   return x;
 }
 

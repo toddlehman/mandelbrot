@@ -10,11 +10,11 @@
 //-----------------------------------------------------------------------------
 // ALLOCATE IMAGE
 
-public_method
-Image *image_alloc(real x_center, real y_center, real x_size,
-                   uint64 iter_max,
-                   int pixel_width, int pixel_height,
-                   int subsample_scale, real subsample_tolerance)
+public_constructor
+Image *image_create(real x_center, real y_center, real x_size,
+                    uint64 iter_max,
+                    int pixel_width, int pixel_height,
+                    int subsample_scale, real subsample_tolerance)
 {
   assert(pixel_width >= 2);
   assert(pixel_height >= 2);
@@ -37,10 +37,26 @@ Image *image_alloc(real x_center, real y_center, real x_size,
   this->y_min = y_center - (y_size / 2);
   this->y_max = y_center + (y_size / 2);
   this->pixel_size = x_size / (real)pixel_width;
-  this->periodicity_epsilon = this->pixel_size / 1e6;
-  this->iter_max = iter_max;
   this->subsample_scale = subsample_scale;
   this->subsample_tolerance = subsample_tolerance;
+
+  {
+    int precision_bits = ceil(-log2(this->pixel_size / 1e6)) + 10;
+    fprintf(stderr, "precision required:  %d bits\n", precision_bits);
+    precision_bits = MAX(precision_bits, 64);
+    precision_bits = 64;
+    fprintf(stderr, "precision using:  %d bits\n", precision_bits);
+
+    mpfr_t periodicity_epsilon;
+    mpfr_init2(periodicity_epsilon, precision_bits);
+    mpfr_set_d(periodicity_epsilon, this->pixel_size / 1e6, MPFR_RNDN);
+
+    this->mandelbrot = mandelbrot_create(iter_max,
+                                         precision_bits,
+                                         periodicity_epsilon);
+
+    mpfr_clear(periodicity_epsilon);
+  }
 
   this->_pixels = mem_alloc_clear(this->di * this->dj, sizeof(Pixel));
   this->pixels = mem_alloc_clear(this->di, sizeof(Pixel **));
@@ -53,7 +69,7 @@ Image *image_alloc(real x_center, real y_center, real x_size,
     this->pixels[i][j].mr = mandelbrot_result_undefined();
   }
 
-  this->palette = palette_alloc();
+  this->palette = palette_create();
 
   return this;
 }
@@ -62,8 +78,8 @@ Image *image_alloc(real x_center, real y_center, real x_size,
 //-----------------------------------------------------------------------------
 // DEALLOCATE IMAGE
 
-public_method
-void image_dealloc(Image **p_this)
+public_destructor
+void image_destroy(Image **p_this)
 {
   assert(p_this);
   Image *this = *p_this;
@@ -75,7 +91,8 @@ void image_dealloc(Image **p_this)
 
   mem_dealloc(&this->pixels);
   mem_dealloc(&this->_pixels);
-  palette_dealloc(&this->palette);
+  palette_destroy(&this->palette);
+  mandelbrot_destroy(&this->mandelbrot);
 
   mem_dealloc(p_this);
 }
@@ -142,16 +159,30 @@ void image_populate_pixel(Image *this, int i, int j)
     return;
 
   // Map image coordinates to Argand plane coordinates.
-  #if 0  // OBSOLETE
-  ArgandPoint c = image_argand_point(this, i, j);
-  #endif
-  real cx = lerp((real)j / (real)(this->dj - 1), this->x_min, this->x_max);
-  real cy = lerp((real)i / (real)(this->di - 1), this->y_max, this->y_min);
+  //real _cx = lerp((real)j / (real)this->dj, this->x_min, this->x_max);
+  //real _cy = lerp((real)i / (real)this->di, this->y_max, this->y_min);
+  mpfr_t cx, cy;
+
+  mpfr_init2(cx, this->mandelbrot->precision_bits);
+  mpfr_set_d(cx, this->x_max, MPFR_RNDN);
+  mpfr_sub_d(cx, cx, this->x_min, MPFR_RNDN);
+  mpfr_mul_ui(cx, cx, j, MPFR_RNDN);
+  mpfr_div_ui(cx, cx, this->dj, MPFR_RNDN);
+  mpfr_add_d(cx, cx, this->x_min, MPFR_RNDN);
+
+  mpfr_init2(cy, this->mandelbrot->precision_bits);
+  mpfr_set_d(cy, this->y_min, MPFR_RNDN);
+  mpfr_sub_d(cy, cy, this->y_max, MPFR_RNDN);
+  mpfr_mul_ui(cy, cy, i, MPFR_RNDN);
+  mpfr_div_ui(cy, cy, this->di, MPFR_RNDN);
+  mpfr_add_d(cy, cy, this->y_max, MPFR_RNDN);
 
   // Calculate iterations.
-  pixel->mr = mandelbrot_compute(cx, cy,
-                                 this->periodicity_epsilon,
-                                 this->iter_max);
+  pixel->mr = mandelbrot_compute(this->mandelbrot, cx, cy);
+  mpfr_clear(cy);
+  mpfr_clear(cx);
+
+  //fprintf(stderr, "pixel(i=%d, j=%d) -> %llu\n", i, j, pixel->mr.iter);
 
   // Map iterations to color.
   pixel->color = palette_color_from_mandelbrot_result(this->palette, pixel->mr);
@@ -164,8 +195,9 @@ void image_populate_pixel(Image *this, int i, int j)
 private_method
 void image_populate_block(Image *this, int i0, int j0, int di, int dj)
 {
-  //printf("image_populate_block(i0=%d, j0=%d, di=%d, dj=%d)\n",
-  //       j0, j0, di, dj);
+  //fprintf(stderr,
+  //        "block(i0=%d, j0=%d, di=%d, dj=%d)\n",
+  //        i0, j0, di, dj);
 
   assert(this);
   assert(i0 >= 0); assert(i0 + di <= this->di);
@@ -455,7 +487,7 @@ void image_output_statistics(Image *this)
         {
           exterior_tally_uniterated++;
         }
-        else if (mr.iter == this->iter_max)
+        else if (mr.iter == this->mandelbrot->iter_max)
         {
           assert(false);  // This should never occur.
           exterior_tally_aperiodic++;
@@ -497,7 +529,7 @@ void image_output_statistics(Image *this)
   image_print_clean_real(this->y_max - this->y_min);
   printf(")\n");
 
-  printf("         Maximum iterations:  %llu\n", this->iter_max);
+  printf("         Maximum iterations:  %llu\n", this->mandelbrot->iter_max);
 
   printf("                 Pixel size:  %d x %d\n", this->dj, this->di);
 
@@ -536,7 +568,7 @@ void image_output_statistics(Image *this)
          "Period detected after", "Quantity", "Percentage", "Percentile");
   printf("%25s  %20s  %9s  %9s\n",
          "---------------------", "--------", "----------", "----------");
-  int max_interior_k = (int)(log(this->iter_max) / log(2));
+  int max_interior_k = (int)(log(this->mandelbrot->iter_max) / log(2));
   uint64 interior_tally_log2_running_total = 0;
 
   interior_tally_log2_running_total += interior_tally_uniterated;
@@ -556,7 +588,7 @@ void image_output_statistics(Image *this)
       (double)interior_tally_log2_running_total / (double)total_interior_pixels * 100);
   }
   interior_tally_log2_running_total += interior_tally_aperiodic;
-  sprintf(buf, "%s %llu", "(never)", this->iter_max);
+  sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
   printf("%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     interior_tally_aperiodic,
@@ -570,7 +602,7 @@ void image_output_statistics(Image *this)
          "Escaped after", "Quantity", "Percentage", "Percentile");
   printf("%25s  %20s  %9s  %9s\n",
          "-------------", "--------", "----------", "----------");
-  int max_exterior_k = (int)(log(this->iter_max) / log(2));
+  int max_exterior_k = (int)(log(this->mandelbrot->iter_max) / log(2));
   uint64 exterior_tally_log2_running_total = 0;
 
   exterior_tally_log2_running_total += exterior_tally_uniterated;
@@ -590,7 +622,7 @@ void image_output_statistics(Image *this)
       (double)exterior_tally_log2_running_total / (double)total_exterior_pixels * 100);
   }
   exterior_tally_log2_running_total += exterior_tally_aperiodic;
-  sprintf(buf, "%s %llu", "(never)", this->iter_max);
+  sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
   printf("%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     exterior_tally_aperiodic,

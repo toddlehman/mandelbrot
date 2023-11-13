@@ -6,6 +6,52 @@
 
 
 //-----------------------------------------------------------------------------
+// NOTES ON ARBITRARY-PRECISION ARITHMETIC
+//
+// Comparison of runtimes:
+//
+// Area focusing on a baby Mandelbrot:
+//
+//     x_center:  -1.98999426899216
+//     y_center:   0.00000000099994
+//       x_size:   0.00000000000015
+//     max_iter:   100000
+//       pixels:   720 x 720
+//     subpixel:   off
+//
+//     64-bit native hardware floating-point:     64.198 seconds
+//     83-bit MPFR arbitrary precision:         5845.529 seconds (91x slower)
+//
+// Area with high noise and almost all exterior points (this is a very pretty
+// picture, by the way):
+//
+//     x_center:  -1.989994268992313
+//     y_center:   0.000000000999976
+//       x_size:   0.000000000000050
+//     max_iter:   1000000
+//       pixels:   see below
+//     subpixel:   off
+//
+//     Size 32 x 32 pixels:
+//     64-bit native hardware floating-point:      0.146 seconds
+//     64-bit MPFR arbitrary precision:           10.343 seconds (71x slower)
+//     128-bit MPFR arbitrary precision:          11.120 seconds (76x slower)
+//     256-bit MPFR arbitrary precision:          12.962 seconds (89x slower)
+//     512-bit MPFR arbitrary precision:          18.986 seconds (130x slower)
+//     1024-bit MPFR arbitrary precision:         38.909 seconds (267x slower)
+//     2048-bit MPFR arbitrary precision:         78.061 seconds (535x slower)
+//     4096-bit MPFR arbitrary precision:        195.929 seconds (1342x slower)
+//     8192-bit MPFR arbitrary precision:        530.959 seconds (3637x slower)
+//
+//     Size 256 x 256 pixels:
+//     64-bit native hardware floating-point:      8.784 seconds
+//     64-bit MPFR arbitrary precision:          614.287 seconds (70x slower)
+//     128-bit MPFR arbitrary precision:         668.130 seconds (76x slower)
+//     256-bit MPFR arbitrary precision:         771.506 seconds (88x slower)
+
+
+
+//-----------------------------------------------------------------------------
 // BAILOUT PARAMETERS
 
 // A bailout radius of 4 is ok, but 16 is much better for smooth coloring.
@@ -18,6 +64,48 @@ private_static const real LOG_BAILOUT_RADIUS      = 2.77258872223978;
 // radius of 2.  Note that this adjustment is not precise and is only a rough
 // estimate based on (2^2)^2 = 16.
 private_static const real BAILOUT_DWELL_OVERHEAD  = 2.0;
+
+
+//-----------------------------------------------------------------------------
+// ALLOCATE
+
+public_constructor
+Mandelbrot *mandelbrot_create(uint64 iter_max,
+                              int precision_bits,
+                              mpfr_t periodicity_epsilon)
+{
+  assert(iter_max > 0);
+  assert(precision_bits >= 64);
+  assert(mpfr_sgn(periodicity_epsilon) >= 0);
+
+  Mandelbrot *this = mem_alloc(1, sizeof(*this));
+
+  this->iter_max = iter_max;
+
+  this->precision_bits = precision_bits;
+
+  mpfr_init2(this->periodicity_epsilon, mpfr_get_prec(periodicity_epsilon));
+  mpfr_set(this->periodicity_epsilon, periodicity_epsilon, MPFR_RNDN);
+
+  return this;
+}
+
+
+//-----------------------------------------------------------------------------
+// DEALLOCATE
+
+public_destructor
+void mandelbrot_destroy(Mandelbrot **p_this)
+{
+  assert(p_this);
+  Mandelbrot *this = *p_this;
+
+  assert(this);
+
+  mpfr_clear(this->periodicity_epsilon);
+  
+  mem_dealloc(p_this);
+}
 
 
 //-----------------------------------------------------------------------------
@@ -166,9 +254,8 @@ uint64 next_iteration_interval(uint64 iter, uint64 iter_max)
 
 //-----------------------------------------------------------------------------
 private_function
-MandelbrotResult mandelbrot_compute_with_periodicity_epsilon(
-                   const real cx, const real cy,
-                   const real epsilon,
+MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
+                   const real cx, const real cy, const real epsilon,
                    const uint64 i_max)
 {
   assert(epsilon > 0);
@@ -204,9 +291,9 @@ MandelbrotResult mandelbrot_compute_with_periodicity_epsilon(
 
 //-----------------------------------------------------------------------------
 private_function
-MandelbrotResult mandelbrot_compute_with_periodicity_exact(const real cx,
-                                                           const real cy,
-                                                           const uint64 i_max)
+MandelbrotResult mandelbrot_compute_low_precision_periodicity_exact(
+                   const real cx, const real cy,
+                   const uint64 i_max)
 {
   assert(i_max > 0);
 
@@ -240,9 +327,9 @@ MandelbrotResult mandelbrot_compute_with_periodicity_exact(const real cx,
 
 //-----------------------------------------------------------------------------
 private_function
-MandelbrotResult mandelbrot_compute_with_no_periodicity(const real cx,
-                                                        const real cy,
-                                                        const uint64 i_max)
+MandelbrotResult mandelbrot_compute_low_precision_no_periodicity(
+                   const real cx, const real cy,
+                   const uint64 i_max)
 {
   assert(i_max > 0);
 
@@ -265,13 +352,12 @@ MandelbrotResult mandelbrot_compute_with_no_periodicity(const real cx,
 
 
 //-----------------------------------------------------------------------------
-public_function
-MandelbrotResult mandelbrot_compute(const real cx, const real cy,
-                                    const real periodicity_epsilon,
-                                    const uint64 iter_max)
+private_function
+MandelbrotResult mandelbrot_compute_low_precision(
+                   const real cx, const real cy,
+                   const real periodicity_epsilon,
+                   const uint64 iter_max)
 {
-  assert(iter_max > 0);
-
   // Early-out test for membership in largest disc.
   if (cx <= -0.75)
   {
@@ -297,18 +383,154 @@ MandelbrotResult mandelbrot_compute(const real cx, const real cy,
   // times faster.
   if (periodicity_epsilon > 0)
   {
-    return mandelbrot_compute_with_periodicity_epsilon(
+    return mandelbrot_compute_low_precision_periodicity_epsilon(
                                     cx, cy, periodicity_epsilon, iter_max);
   }
   else if (periodicity_epsilon == 0)
   {
-    return mandelbrot_compute_with_periodicity_exact(cx, cy, iter_max);
+    return mandelbrot_compute_low_precision_periodicity_exact(cx, cy, iter_max);
   }
   else
   {
-    return mandelbrot_compute_with_no_periodicity(cx, cy, iter_max);
+    return mandelbrot_compute_low_precision_no_periodicity(cx, cy, iter_max);
   }
 }
 
 
 //-----------------------------------------------------------------------------
+private_function
+MandelbrotResult mandelbrot_compute_high_precision(
+                   const mpfr_t cx, const mpfr_t cy, const mpfr_t epsilon,
+                   const uint64 i_max)
+{
+  assert(i_max > 0);
+
+  // FIXME:  These are never deallocated.
+  static mpfr_t _n_0_75, _p_0_0625;
+  static mpfr_t x, y, x2, y2, z2, r2, x_base, y_base, t;
+  static bool initialized = false;
+  if (!initialized)
+  {
+    mpfr_init2(_n_0_75, mpfr_get_prec(epsilon));
+    mpfr_set_d(_n_0_75, -0.75, MPFR_RNDN);
+
+    mpfr_init2(_p_0_0625, mpfr_get_prec(epsilon));
+    mpfr_set_d(_p_0_0625, +0.0625, MPFR_RNDN);
+
+    mpfr_init2(r2, mpfr_get_prec(epsilon));
+    mpfr_set_d(r2, BAILOUT_RADIUS_SQUARED, MPFR_RNDN);
+
+    mpfr_init2(x,      mpfr_get_prec(epsilon));
+    mpfr_init2(y,      mpfr_get_prec(epsilon));
+    mpfr_init2(x2,     mpfr_get_prec(epsilon));
+    mpfr_init2(y2,     mpfr_get_prec(epsilon));
+    mpfr_init2(z2,     mpfr_get_prec(epsilon));
+    mpfr_init2(x_base, mpfr_get_prec(epsilon));
+    mpfr_init2(y_base, mpfr_get_prec(epsilon));
+    mpfr_init2(t,      mpfr_get_prec(epsilon));
+
+    initialized = true;
+  }
+
+  // Early-out test for membership in largest disc.
+  if (mpfr_lessequal_p(cx, _n_0_75))          // if (cx <= 0.75)
+  {
+    mpfr_add_d(x, cx, 1.0, MPFR_RNDN);        // x = cx + 1.0;
+    mpfr_sqr(x2, x, MPFR_RNDN);               //   x2 = x*x;
+    mpfr_sqr(y2, cy, MPFR_RNDN);              //   y2 = cy*cy;
+    mpfr_add(z2, x2, y2, MPFR_RNDN);          //   z2 = x2 + y2;
+    if (mpfr_less_p(z2, _p_0_0625))           // if (x*x + cy*cy < 0.0625)
+      return mandelbrot_result_interior_uniterated();
+  }
+
+  // Early-out test for membership in main cardioid.
+  else
+  {
+    mpfr_sub_d(x, cx, 0.25, MPFR_RNDN);       // x = cx - 0.25;
+    mpfr_sqr(x2, x, MPFR_RNDN);               //   x2 = x*x;
+    mpfr_sqr(y2, cy, MPFR_RNDN);              //   y2 = cy*cy;
+    mpfr_add(y, x2, y2, MPFR_RNDN);           // y = x*x + cy*cy;
+    mpfr_add(x, x, y, MPFR_RNDN);             // x += y;
+    mpfr_add(x, x, y, MPFR_RNDN);             // x += y;
+    mpfr_sqr(x2, x, MPFR_RNDN);               //   x2 = x*x;
+    if (mpfr_lessequal_p(x2, y))              // if (x*x <= y)
+      return mandelbrot_result_interior_uniterated();
+  }
+
+  // Handle other cases with periodicity checking.
+
+  mpfr_set(x, cx, MPFR_RNDN);                 // x = cx;
+  mpfr_set(y, cy, MPFR_RNDN);                 // y = cy;
+  mpfr_set_d(x_base, 1e99, MPFR_RNDN);        // x_base = 1e99;
+  mpfr_set_d(y_base, 1e99, MPFR_RNDN);        // y_base = 1e99;
+  // FIXME:    These ^^^^ probably overflow.
+
+  for (uint64 i_base = 0; i_base < i_max; )
+  {
+    uint64 i_bound = next_iteration_interval(i_base, i_max);
+
+    for (uint64 i = i_base; i < i_bound; )
+    {
+      mpfr_sqr(x2, x, MPFR_RNDN);             // x2 = x * x;
+      mpfr_sqr(y2, y, MPFR_RNDN);             // y2 = y * y;
+      mpfr_add(z2, x2, y2, MPFR_RNDN);        // z2 = x2 + y2;
+
+      if (mpfr_greaterequal_p(z2, r2))        // if (z2 >= r2)
+      {
+        real _z2 = mpfr_get_d(z2, MPFR_RNDN);
+        return mandelbrot_result_exterior(i, dwell(i, _z2));
+      }
+
+      mpfr_mul(y, x, y, MPFR_RNDN);           // y = x * y;
+      mpfr_add(y, y, y, MPFR_RNDN);           // y += y;
+      mpfr_add(y, y, cy, MPFR_RNDN);          // y += cy;
+      mpfr_sub(x, x2, y2, MPFR_RNDN);         // x = x2 - y2;
+      mpfr_add(x, x, cx, MPFR_RNDN);          // x += cx;
+      i++;
+
+      mpfr_sub(t, x, x_base, MPFR_RNDN);      // t = x - x_base;
+      mpfr_abs(t, t, MPFR_RNDN);              // t = fabs(x - x_base);
+      if (mpfr_lessequal_p(t, epsilon))       // if (fabs(x-x_base) <= epsilon)
+      {
+        mpfr_sub(t, y, y_base, MPFR_RNDN);    // t = y - y_base;
+        mpfr_abs(t, t, MPFR_RNDN);            // t = fabs(y - y_base);
+        if (mpfr_lessequal_p(t, epsilon))     // if (fabs(y-y_base) <= epsilon)
+        {
+          return mandelbrot_result_interior_iterated_periodic(i, i - i_base);
+        }
+      }
+    }
+
+    mpfr_set(x_base, x, MPFR_RNDN);           // x_base = x;
+    mpfr_set(y_base, y, MPFR_RNDN);           // y_base = y;
+    i_base = i_bound;
+  }
+
+  return mandelbrot_result_interior_iterated_aperiodic(i_max);
+}
+
+
+//-----------------------------------------------------------------------------
+public_method
+MandelbrotResult mandelbrot_compute(Mandelbrot *this, mpfr_t cx, mpfr_t cy)
+{
+  if (true) //this->precision_bits <= 64)
+  {
+    return mandelbrot_compute_low_precision(
+             mpfr_get_d(cx, MPFR_RNDN),
+             mpfr_get_d(cy, MPFR_RNDN),
+             mpfr_get_d(this->periodicity_epsilon, MPFR_RNDN),
+             this->iter_max);
+  }
+  else
+  {
+    return mandelbrot_compute_high_precision(
+             cx, cy,
+             this->periodicity_epsilon,
+             this->iter_max);
+  }
+}
+
+
+//-----------------------------------------------------------------------------
+

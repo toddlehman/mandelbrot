@@ -25,8 +25,8 @@
 //-----------------------------------------------------------------------------
 // ALLOCATE
 
-public_method
-DeepReal *dr_alloc(int bits_deep)
+public_constructor
+DeepReal *dr_create(int bits_deep)
 {
   assert(bits_deep >= 32);
 
@@ -46,10 +46,10 @@ DeepReal *dr_alloc(int bits_deep)
 //-----------------------------------------------------------------------------
 // ALLOCATE WITH INTEGER VALUE
 
-public_method
-DeepReal *dr_alloc_int32(int bits_deep, int32 n)
+public_constructor
+DeepReal *dr_create_int32(int bits_deep, int32 n)
 {
-  DeepReal *this = dr_alloc(bits_deep);
+  DeepReal *this = dr_create(bits_deep);
   dr_set_int32(this, n);
   return this;
 }
@@ -58,10 +58,10 @@ DeepReal *dr_alloc_int32(int bits_deep, int32 n)
 //-----------------------------------------------------------------------------
 // ALLOCATE WITH FLOATING-POINT VALUE
 
-public_method
-DeepReal *dr_alloc_float64(int bits_deep, float64 x)
+public_constructor
+DeepReal *dr_create_float64(int bits_deep, float64 x)
 {
-  DeepReal *this = dr_alloc(bits_deep);
+  DeepReal *this = dr_create(bits_deep);
   dr_set_float64(this, x);
   return this;
 }
@@ -70,8 +70,8 @@ DeepReal *dr_alloc_float64(int bits_deep, float64 x)
 //-----------------------------------------------------------------------------
 // DEALLOCATE
 
-public_method
-void dr_dealloc(DeepReal **p_this)
+public_destructor
+void dr_destroy(DeepReal **p_this)
 {
   assert(p_this);
   DeepReal *this = *p_this;
@@ -128,7 +128,7 @@ void dr_print(DeepReal *this)
     temp->v[0] = 0;
   }
 
-  dr_dealloc(&temp);
+  dr_destroy(&temp);
 }
 
 
@@ -682,11 +682,11 @@ void dr_test(void)
 {
 #if 0
   int bits_deep = 32*10;
-  DeepReal *x_min = dr_alloc(bits_deep);
-  DeepReal *x_max = dr_alloc(bits_deep);
-  DeepReal *dx    = dr_alloc(bits_deep);
-  DeepReal *x     = dr_alloc(bits_deep);
-  DeepReal *zero  = dr_alloc(bits_deep);
+  DeepReal *x_min = dr_create(bits_deep);
+  DeepReal *x_max = dr_create(bits_deep);
+  DeepReal *dx    = dr_create(bits_deep);
+  DeepReal *x     = dr_create(bits_deep);
+  DeepReal *zero  = dr_create(bits_deep);
 
   dr_set_float64(x_min, -2.00);
   dr_set_float64(x_max,  0.50);
@@ -736,8 +736,8 @@ void dr_test(void)
 
   int bits_deep = 65536; //32*10;
 #if 1
-  DeepReal *a = dr_alloc(bits_deep);
-  DeepReal *x = dr_alloc(bits_deep);
+  DeepReal *a = dr_create(bits_deep);
+  DeepReal *x = dr_create(bits_deep);
   dr_set_int32(a, 0);
   dr_set_int32(x, 1);
   for (int i = 1; i <= bits_deep; i++)

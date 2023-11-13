@@ -10,13 +10,11 @@
 
 typedef struct
 {
-  int     precision_bits;
-  mpfr_t  cx;
-  mpfr_t  cy;
-  mpfr_t  periodicity_epsilon;
   uint64  iter_max;
+  int     precision_bits;
+  mpfr_t  periodicity_epsilon;
 }
-MandelbrotParam;
+Mandelbrot;
 
 
 //-----------------------------------------------------------------------------
@@ -162,8 +160,14 @@ MandelbrotResult mandelbrot_result_exterior(const uint64 iter,
 //-----------------------------------------------------------------------------
 // FUNCTION PROTOTYPES
 
-extern_public_function
-MandelbrotResult mandelbrot_compute(real cx, real cy,
-                                    real periodicity_epsilon,
-                                    uint64 iter_max);
+extern_public_constructor
+  Mandelbrot *mandelbrot_create(uint64 iter_max,
+                                int precision_bits,
+                                mpfr_t periodicity_epsilon);
+
+extern_public_destructor
+  void mandelbrot_destroy(Mandelbrot **this);
+
+extern_public_method
+  MandelbrotResult mandelbrot_compute(Mandelbrot *this, mpfr_t cx, mpfr_t cy);
 
