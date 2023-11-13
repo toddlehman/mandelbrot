@@ -10,9 +10,9 @@
 
 typedef struct
 {
-  uint64  iter_max;
-  int     precision_bits;
-  mpfr_t  periodicity_epsilon;
+  uint64   iter_max;
+  int      mp_prec;
+  mp_real  periodicity_epsilon;
 }
 Mandelbrot;
 
@@ -27,11 +27,11 @@ Mandelbrot;
 
 typedef struct
 {
-  float64  dwell;
-  uint64   iter;
-  uint64   period;
+  float64  dwell;    // Mandelbrot "dwell" value (8 bytes)
+  uint64   iter;     // Number of iterations computed (8 bytes)
+  uint64   period;   // Period of orbit, if detected (8 bytes)
 }
-MandelbrotResult;
+MandelbrotResult;    // (24 bytes)
 
 #pragma pack(pop)
 
@@ -162,12 +162,12 @@ MandelbrotResult mandelbrot_result_exterior(const uint64 iter,
 
 extern_public_constructor
   Mandelbrot *mandelbrot_create(uint64 iter_max,
-                                int precision_bits,
-                                mpfr_t periodicity_epsilon);
+                                int mp_prec,
+                                mp_real periodicity_epsilon);
 
 extern_public_destructor
   void mandelbrot_destroy(Mandelbrot **this);
 
 extern_public_method
-  MandelbrotResult mandelbrot_compute(Mandelbrot *this, mpfr_t cx, mpfr_t cy);
+  MandelbrotResult mandelbrot_compute(Mandelbrot *this, mp_real cx, mp_real cy);
 

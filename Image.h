@@ -16,20 +16,23 @@ typedef struct
 
   Palette  *palette;
 
-  int      di;  // Height in pixels.
-  int      dj;  // Width in pixels.
+  int      di;   // Effective height in pixels.
+  int      dj;   // Effective width in pixels.
+  int      _di;  // Actual height in pixels (requested value plus 1 extra).
+  int      _dj;  // Actual width in pixels (requested value plus 1 extra).
 
-  real     x_center, y_center;
-  real     x_min,    y_min;
-  real     x_max,    y_max;
+  mp_real  x_center, y_center;
+  mp_real  x_size,   y_size;
+  mp_real  x_min,    y_min;
+  mp_real  x_max,    y_max;
 
-  real     pixel_size;
-  real     periodicity_epsilon;
+  mp_real  pixel_size;
+  mp_real  periodicity_epsilon;
+
+  int      subsample_limit;
+  real     subsample_tolerance;
 
   uint64   iter_max;
-
-  int      subsample_scale;
-  real     subsample_tolerance;
 
   Mandelbrot  *mandelbrot;
 }
@@ -40,20 +43,20 @@ Image;
 // FUNCTION PROTOTYPES
 
 extern_public_constructor
-Image *image_create(real x_center, real y_center, real x_size,
-                    uint64 iter_max,
-                    int pixel_width, int pixel_height,
-                    int subsample_scale, real subsample_tolerance);
+  Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
+                      int pixel_width, int pixel_height,
+                      int subsample_limit, real subsample_tolerance,
+                      uint64 iter_max);
 
 extern_public_destructor
-void image_destroy(Image **this);
+  void image_destroy(Image **this);
 
 extern_public_method
-void image_populate(Image *this);
+  void image_populate(Image *this);
 
 extern_public_method
-void image_output(Image *this, bool text_format);
+  void image_output(Image *this, bool text_format);
 
 extern_public_method
-void image_output_statistics(Image *this);
+  void image_output_statistics(Image *this);
 

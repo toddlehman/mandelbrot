@@ -10,6 +10,7 @@ LINK =		cc -L/opt/local/lib -lmpfr
 PROGS =		mset_image
 
 MODULES =	Common \
+                mp_real \
 		Memory \
 		DeepReal \
 		Mandelbrot \
@@ -65,6 +66,8 @@ mset_image:	$(O_FILES)
 	@$(COMPILE) -c $< -o $@
 
 #------------------------------------------------------------------------------
+
+mp_real.o:      mp_real.h      mp_real.c
 
 Common.o:	Common.h       Common.c
 Memory.o:	Memory.h       Memory.c        Common.o

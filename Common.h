@@ -17,9 +17,6 @@
 #import <limits.h>
 #import <assert.h>
 
-// Additional libraries
-#import <mpfr.h>
-
 
 //------------------------------------------------------------------------------
 // The overloading of the word "static" in C is annoying.  Sometimes it actually
@@ -27,7 +24,7 @@
 // needed for public functions (namely, when declaring inline functions in a
 // header file).  For easier reading, the following are used in this program
 // instead.
-//
+
 #define  private_static             static
 #define  public_static
 
@@ -146,4 +143,5 @@ void error_exit(char *message);
 //-----------------------------------------------------------------------------
 // PROJECT-LOCAL INCLUDE FILES
 
+#import "mp_real.h"  // Wrapper for <mpfr.h>
 #import "Memory.h"

@@ -12,11 +12,11 @@
 
 typedef struct
 {
-  float32  r;  // Red color component, where 0 <= r <= 1.
-  float32  g;  // Green color component, where 0 <= g <= 1.
-  float32  b;  // Blue color component, where 0 <= b <= 1.
+  float32  r;  // Red   color component, where 0 <= r <= 1.  (4 bytes)
+  float32  g;  // Green color component, where 0 <= g <= 1.  (4 bytes)
+  float32  b;  // Blue  color component, where 0 <= b <= 1.  (4 bytes)
 }
-LinearRGB;
+LinearRGB;     // (12 bytes)
 
 #pragma pack(pop)
 
@@ -28,11 +28,11 @@ LinearRGB;
 
 typedef struct
 {
-  uint8  r;  // Red color component, where 0 <= r <= 255.
-  uint8  g;  // Green color component, where 0 <= g <= 255.
-  uint8  b;  // Blue color component, where 0 <= b <= 255.
+  uint8  r;   // Red   color component, where 0 <= r <= 255.  (1 byte)
+  uint8  g;   // Green color component, where 0 <= g <= 255.  (1 byte)
+  uint8  b;   // Blue  color component, where 0 <= b <= 255.  (1 byte)
 }
-DeviceRGB24;
+DeviceRGB24;  // (3 bytes)
 
 #pragma pack(pop)
 
@@ -44,11 +44,11 @@ DeviceRGB24;
 
 typedef struct
 {
-  uint16  r;  // Red color component, where 0 <= r <= 65535.
-  uint16  g;  // Green color component, where 0 <= g <= 65535.
-  uint16  b;  // Blue color component, where 0 <= b <= 65535.
+  uint16  r;  // Red   color component, where 0 <= r <= 65535.  (2 bytes)
+  uint16  g;  // Green color component, where 0 <= g <= 65535.  (2 bytes)
+  uint16  b;  // Blue  color component, where 0 <= b <= 65535.  (2 bytes)
 }
-DeviceRGB48;
+DeviceRGB48;  // (6 bytes)
 
 #pragma pack(pop)
 

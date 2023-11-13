@@ -11,60 +11,101 @@
 // ALLOCATE IMAGE
 
 public_constructor
-Image *image_create(real x_center, real y_center, real x_size,
-                    uint64 iter_max,
-                    int pixel_width, int pixel_height,
-                    int subsample_scale, real subsample_tolerance)
+Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
+                    int width_pixels, int height_pixels,
+                    int subsample_limit, real subsample_tolerance,
+                    uint64 iter_max)
 {
-  assert(pixel_width >= 2);
-  assert(pixel_height >= 2);
-  assert(x_size > 0);
-  assert(iter_max > 0);
-  assert(subsample_scale >= 1);
+  assert(mp_sgn(xy_min_size) > 0);
+  assert(width_pixels >= 1);
+  assert(height_pixels >= 1);
+  assert(subsample_limit >= 1);
   assert(subsample_tolerance >= 0);
   assert(subsample_tolerance <= 1);
-
-  real y_size = x_size * (real)pixel_height / (real)pixel_width;
+  assert(iter_max > 0);
 
   Image *this = mem_alloc_clear(1, sizeof(Image));
 
-  this->di = pixel_height;
-  this->dj = pixel_width;
-  this->x_center = x_center;
-  this->y_center = y_center;
-  this->x_min = x_center - (x_size / 2);
-  this->x_max = x_center + (x_size / 2);
-  this->y_min = y_center - (y_size / 2);
-  this->y_max = y_center + (y_size / 2);
-  this->pixel_size = x_size / (real)pixel_width;
-  this->subsample_scale = subsample_scale;
-  this->subsample_tolerance = subsample_tolerance;
+  int mp_prec = mp_get_prec(x_center);  // KLUDGE for now
+  mp_prec += ceil(log2(MAX(width_pixels, height_pixels)));
+  mp_prec += ceil((real)subsample_limit / 2);
+  fprintf(stderr, "precision required:  %d bits\n", mp_prec);
+  mp_prec = MAX(mp_prec, 64);
+  mp_prec = 64;
+  fprintf(stderr, "precision using:  %d bits\n", mp_prec);
 
+  mp_init2(this->x_center, mp_prec); mp_init2(this->y_center, mp_prec);
+  mp_init2(this->x_size,   mp_prec); mp_init2(this->y_size,   mp_prec);
+  mp_init2(this->x_min,    mp_prec); mp_init2(this->y_min,    mp_prec);
+  mp_init2(this->x_max,    mp_prec); mp_init2(this->y_max,    mp_prec);
+  mp_init2(this->pixel_size, mp_prec);
+  mp_init2(this->periodicity_epsilon, mp_prec);
+
+  if (width_pixels == height_pixels)
   {
-    int precision_bits = ceil(-log2(this->pixel_size / 1e6)) + 10;
-    fprintf(stderr, "precision required:  %d bits\n", precision_bits);
-    precision_bits = MAX(precision_bits, 64);
-    precision_bits = 64;
-    fprintf(stderr, "precision using:  %d bits\n", precision_bits);
-
-    mpfr_t periodicity_epsilon;
-    mpfr_init2(periodicity_epsilon, precision_bits);
-    mpfr_set_d(periodicity_epsilon, this->pixel_size / 1e6, MPFR_RNDN);
-
-    this->mandelbrot = mandelbrot_create(iter_max,
-                                         precision_bits,
-                                         periodicity_epsilon);
-
-    mpfr_clear(periodicity_epsilon);
+    mp_set(this->x_size, xy_min_size, MP_ROUND);
+    mp_set(this->y_size, xy_min_size, MP_ROUND);
+  }
+  else if (width_pixels > height_pixels)
+  {
+    real aspect_ratio = (real)width_pixels / (real)height_pixels;
+    mp_set(this->y_size, xy_min_size, MP_ROUND);
+    mp_mul_d(this->x_size, xy_min_size, aspect_ratio, MP_ROUND);
+  }
+  else if (width_pixels < height_pixels)
+  {
+    real aspect_ratio = (real)width_pixels / (real)height_pixels;
+    mp_set(this->x_size, xy_min_size, MP_ROUND);
+    mp_div_d(this->y_size, xy_min_size, aspect_ratio, MP_ROUND);
   }
 
-  this->_pixels = mem_alloc_clear(this->di * this->dj, sizeof(Pixel));
-  this->pixels = mem_alloc_clear(this->di, sizeof(Pixel **));
-  for (int i = 0; i < this->di; i++)
-    this->pixels[i] = this->_pixels + (i * this->dj);
+  this->di = height_pixels;
+  this->dj = width_pixels;
+  this->_di = this->di + 1;
+  this->_dj = this->dj + 1;
 
-  for (int i = 0; i < this->di; i++)
-  for (int j = 0; j < this->dj; j++)
+  mp_set(this->x_center, x_center, MP_ROUND);
+  mp_set(this->y_center, y_center, MP_ROUND);
+
+  {
+    mp_real half_x_size; mp_init2(half_x_size, mp_prec);
+    mp_real half_y_size; mp_init2(half_y_size, mp_prec);
+
+    mp_div_ui(half_x_size, this->x_size, 2, MP_ROUND);
+    mp_div_ui(half_y_size, this->y_size, 2, MP_ROUND);
+
+    mp_sub(this->x_min, this->x_center, half_x_size, MP_ROUND);
+    mp_sub(this->y_min, this->y_center, half_y_size, MP_ROUND);
+
+    mp_add(this->x_max, this->x_center, half_x_size, MP_ROUND);
+    mp_add(this->y_max, this->y_center, half_y_size, MP_ROUND);
+
+    mp_clear(half_y_size);
+    mp_clear(half_x_size);
+  }
+
+  // FIXME:  When doing 3D viewport, this will no longer make sense.
+  mp_div_ui(this->pixel_size, this->x_size, this->dj, MP_ROUND);
+
+  {
+    mp_real periodicity_epsilon;
+    mp_init2(periodicity_epsilon, mp_prec);
+    mp_div_d(periodicity_epsilon, this->pixel_size, 1e6, MP_ROUND);
+    this->mandelbrot = mandelbrot_create(iter_max, mp_prec,
+                                         periodicity_epsilon);
+    mp_clear(periodicity_epsilon);
+  }
+
+  this->subsample_limit = subsample_limit;
+  this->subsample_tolerance = subsample_tolerance;
+
+  this->_pixels = mem_alloc_clear(this->_di * this->_dj, sizeof(Pixel));
+  this->pixels = mem_alloc_clear(this->_di, sizeof(Pixel **));
+  for (int i = 0; i < this->_di; i++)
+    this->pixels[i] = this->_pixels + (i * this->_dj);
+
+  for (int i = 0; i < this->_di; i++)
+  for (int j = 0; j < this->_dj; j++)
   {
     this->pixels[i][j].mr = mandelbrot_result_undefined();
   }
@@ -85,61 +126,113 @@ void image_destroy(Image **p_this)
   Image *this = *p_this;
 
   assert(this);
-  assert(this->pixels);
-  assert(this->_pixels);
-  assert(this->palette);
 
+  assert(this->pixels);
   mem_dealloc(&this->pixels);
+
+  assert(this->_pixels);
   mem_dealloc(&this->_pixels);
+
+  assert(this->palette);
   palette_destroy(&this->palette);
+
+  assert(this->mandelbrot);
   mandelbrot_destroy(&this->mandelbrot);
+
+  mp_clear(this->x_center);
+  mp_clear(this->y_center);
+  mp_clear(this->x_size);
+  mp_clear(this->y_size);
+  mp_clear(this->x_min);
+  mp_clear(this->y_min);
+  mp_clear(this->x_max);
+  mp_clear(this->y_max);
+  mp_clear(this->pixel_size);
+  mp_clear(this->periodicity_epsilon);
 
   mem_dealloc(p_this);
 }
 
 
-#if 0  // OBSOLETE
 //-----------------------------------------------------------------------------
 // MAP IMAGE COORDINATES TO M-SET COORDINATES
 
 private_method
-ArgandPoint image_argand_point(Image *this, int i, int j)
+bool image_compute_argand_point(Image *this,
+                                real i, real j,
+                                mp_real *x, mp_real *y)
 {
-  assert(this);
+  assert(this); assert(x); assert(y);
+  assert(i >= 0); assert(i <= (real)this->di);
+  assert(j >= 0); assert(j <= (real)this->dj);
 
-  return (ArgandPoint)
-  {
-    .x = lerp((real)j / (real)(this->dj - 1), this->x_min, this->x_max),
-    .y = lerp((real)i / (real)(this->di - 1), this->y_max, this->y_min)
-  };
+  //mp_lerp_d(*x, (real)j / (real)this->dj, this->x_min, this->x_max);
+  //mp_lerp_d(*y, (real)i / (real)this->di, this->y_max, this->y_min);
+
+  mp_mul_d(*x, this->x_size, (real)j / (real)this->dj, MP_ROUND);
+  mp_add(*x, this->x_min, *x, MP_ROUND);
+
+  mp_mul_d(*y, this->y_size, (real)i / (real)this->di, MP_ROUND);
+  mp_sub(*y, this->y_max, *y, MP_ROUND);
+
+  return true;
 }
-#endif
 
 
 //-----------------------------------------------------------------------------
-// GET PIXEL
+// COMPUTE NON-SUBSAMPLED PIXEL
 
-#if 0  // OBSOLETE
 private_method
-Pixel image_get_pixel(Image *this, int i, int j)
+void image_compute_pixel(Image *this, real i, real j, Pixel *pixel)
+{
+  assert(this); assert(pixel);
+
+  // Map image coordinates to Argand plane coordinates.
+  mp_real x, y;
+  mp_init2(x, this->mandelbrot->mp_prec);
+  mp_init2(y, this->mandelbrot->mp_prec);
+  (void)image_compute_argand_point(this, i, j, &x, &y);
+
+  // Calculate iterations.
+  pixel->mr = mandelbrot_compute(this->mandelbrot, x, y);
+  mp_clear(y);
+  mp_clear(x);
+
+  // Map iterations to color.
+  pixel->color = palette_color_from_mandelbrot_result(this->palette, pixel->mr);
+
+  #if 0
+  if ((i == floor(i)) && (j == floor(j)))
+    fprintf(stderr, "pixel(i=%d, j=%d) -> %llu (%.3f,%.3f,%.3f)\n",
+            (int)i, (int)j, pixel->mr.iter,
+            pixel->color.r, pixel->color.g, pixel->color.b);
+  else
+    fprintf(stderr, "pixel(i=%f, j=%f) -> %llu (%.3f,%.3f,%.3f)\n",
+            i, j, pixel->mr.iter,
+            pixel->color.r, pixel->color.g, pixel->color.b);
+  #endif
+}
+
+
+//-----------------------------------------------------------------------------
+// CALCULATE SUBSAMPLED PIXEL
+
+private_method
+Pixel image_compute_subsampled_pixel(Image *this,
+                                     mp_real *x0, mp_real *y0,
+                                     mp_real *dx, mp_real *dy,
+                                     LinearRGB color00, LinearRGB color01,
+                                     LinearRGB color10, LinearRGB color11,
+                                     int current_subsample_depth)
 {
   assert(this);
 
-  if ((i >= 0) && (i < this->di) &&
-      (j >= 0) && (j < this->dj))
-  {
-    return this->pixels[i][j];
-  }
-  else
-  {
-    return (Pixel)
-    {
-      .mr     = mandelbrot_result_undefined(),
-      .color  = palette_undefined_color(this->palette)
-    };
-  }
-}
+#if 0  // *******TEMPORARY*******
+  assert(x0); assert(y0); assert(dx); assert(dy);
 #endif
+
+  return (Pixel) { };
+}
 
 
 //-----------------------------------------------------------------------------
@@ -149,43 +242,35 @@ private_method
 void image_populate_pixel(Image *this, int i, int j)
 {
   assert(this);
-  assert(i >= 0); assert(i < this->di);
-  assert(j >= 0); assert(j < this->dj);
+  assert(i >= 0); assert(i < this->_di);
+  assert(j >= 0); assert(j < this->_dj);
 
-  Pixel *pixel = &this->pixels[i][j];
+  unless (pixel_is_defined(this->pixels[i][j]))
+  {
+    image_compute_pixel(this, (real)i, (real)j, &(this->pixels[i][j]));
+  }
+}
 
-  // Early-out if value is already known.
-  if (pixel_is_defined(*pixel))
-    return;
 
-  // Map image coordinates to Argand plane coordinates.
-  //real _cx = lerp((real)j / (real)this->dj, this->x_min, this->x_max);
-  //real _cy = lerp((real)i / (real)this->di, this->y_max, this->y_min);
-  mpfr_t cx, cy;
 
-  mpfr_init2(cx, this->mandelbrot->precision_bits);
-  mpfr_set_d(cx, this->x_max, MPFR_RNDN);
-  mpfr_sub_d(cx, cx, this->x_min, MPFR_RNDN);
-  mpfr_mul_ui(cx, cx, j, MPFR_RNDN);
-  mpfr_div_ui(cx, cx, this->dj, MPFR_RNDN);
-  mpfr_add_d(cx, cx, this->x_min, MPFR_RNDN);
+//-----------------------------------------------------------------------------
+// REPOPULATE PIXEL
 
-  mpfr_init2(cy, this->mandelbrot->precision_bits);
-  mpfr_set_d(cy, this->y_min, MPFR_RNDN);
-  mpfr_sub_d(cy, cy, this->y_max, MPFR_RNDN);
-  mpfr_mul_ui(cy, cy, i, MPFR_RNDN);
-  mpfr_div_ui(cy, cy, this->di, MPFR_RNDN);
-  mpfr_add_d(cy, cy, this->y_max, MPFR_RNDN);
+private_method
+void image_repopulate_pixel(Image *this, int i, int j)
+{
+  assert(this);
+  assert(i >= 0); assert(i < this->di);  // *Not* this->_di here.
+  assert(j >= 0); assert(j < this->dj);  // *Not* this->_dj here.
 
-  // Calculate iterations.
-  pixel->mr = mandelbrot_compute(this->mandelbrot, cx, cy);
-  mpfr_clear(cy);
-  mpfr_clear(cx);
-
-  //fprintf(stderr, "pixel(i=%d, j=%d) -> %llu\n", i, j, pixel->mr.iter);
-
-  // Map iterations to color.
-  pixel->color = palette_color_from_mandelbrot_result(this->palette, pixel->mr);
+  this->pixels[i][j] =
+    image_compute_subsampled_pixel(this, 
+      NULL, NULL, NULL, NULL,
+      this->pixels[i+0][j+0].color,
+      this->pixels[i+0][j+1].color,
+      this->pixels[i+1][j+0].color,
+      this->pixels[i+1][j+1].color,
+      1);
 }
 
 
@@ -200,8 +285,8 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
   //        i0, j0, di, dj);
 
   assert(this);
-  assert(i0 >= 0); assert(i0 + di <= this->di);
-  assert(j0 >= 0); assert(j0 + dj <= this->dj);
+  assert(i0 >= 0); assert(i0 + di <= this->_di);
+  assert(j0 >= 0); assert(j0 + dj <= this->_dj);
 
 
   // --- Populate the boundary of the block.
@@ -302,17 +387,28 @@ void image_populate(Image *this)
 {
   assert(this);
 
-  // Make a first pass to populate every pixel in the image.
-  image_populate_block(this, 0, 0, this->di, this->dj);
+  bool subsampling = (this->subsample_limit > 0) &&
+                     (this->subsample_tolerance < 1);
+
+  // Make a first pass to populate every pixel in the image, including the
+  // extra row and column at the bottom and right edges if subsampling is
+  // enabled.
+  image_populate_block(this,
+                       0,
+                       0,
+                       subsampling? this->_di : this->di,
+                       subsampling? this->_dj : this->dj);
 
   // Return now if subsampling is not requested.
-  if ((this->subsample_scale == 1) || (this->subsample_tolerance >= 1))
+  if (!subsampling)
     return;
 
-  // Go back and subsample pixels whose neighbors are significantly different
-  // in color.  First mark all such pixels for recalculation.
-  for (int i = 0; i < this->di - 1; i++)
-  for (int j = 0; j < this->dj - 1; j++)
+  // Go back and subsample pixels whose rightward and downward neighbors are
+  // significantly different in color.  (The "+1"s in the indexes here are safe
+  // because the image is padded by one row and column at the bottom and right
+  // edges.)
+  for (int i = 0; i < this->di; i++)
+  for (int j = 0; j < this->dj; j++)
   {
     float32 diff = linear_rgb_diff4(
       this->pixels[i+0][j+0].color,
@@ -321,9 +417,12 @@ void image_populate(Image *this)
       this->pixels[i+1][j+1].color
     );
 
+    // TODO:  Do adaptive pixel subsampling instead of this averaging.
+
     if (diff > this->subsample_tolerance)
     {
-      //this->pixels[i][j].color = palette_undefined_color(this->palette);
+if (0)
+      image_repopulate_pixel(this, i, j);
 
       LinearRGB color = linear_rgb_average4(
         this->pixels[i+0][j+0].color,
@@ -404,6 +503,7 @@ void image_output(Image *this, bool text_format)
 //-----------------------------------------------------------------------------
 // PRINT CLEAN FLOATING-POINT NUMBER
 
+#if 0  // OBSOLETE
 private_method
 void image_print_clean_real(real value)
 {
@@ -416,6 +516,7 @@ void image_print_clean_real(real value)
     *p-- = '\0';
   printf("%s", buf);
 }
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -517,23 +618,17 @@ void image_output_statistics(Image *this)
 
   uint64 total_iter = total_interior_iter + total_exterior_iter;
 
-  printf("                     Center:  (");
-  image_print_clean_real(this->x_center);
-  printf(",");
-  image_print_clean_real(this->y_center);
-  printf(")\n");
+  mp_printf("                     Center:  (%RNf,%RNf)\n",
+            this->x_center, this->y_center);
 
-  printf("                       Size:  (");
-  image_print_clean_real(this->x_max - this->x_min);
-  printf(",");
-  image_print_clean_real(this->y_max - this->y_min);
-  printf(")\n");
+  mp_printf("                       Size:  (%RNf,%RNf)\n",
+            this->x_size, this->y_size);
 
   printf("         Maximum iterations:  %llu\n", this->mandelbrot->iter_max);
 
   printf("                 Pixel size:  %d x %d\n", this->dj, this->di);
 
-  printf("          Subsampling scale:  %d\n", this->subsample_scale);
+  printf("          Subsampling limit:  %d\n", this->subsample_limit);
   printf("      Subsampling tolerance:  %f\n", this->subsample_tolerance);
   printf("\n");
 

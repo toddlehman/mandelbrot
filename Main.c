@@ -29,6 +29,21 @@ void usage_exit(char *program_path)
 
 
 //-----------------------------------------------------------------------------
+// CALCULATE MINIMUM BIT-PRECISION FOR NUMBER IN STRING
+
+private_function
+int mp_get_min_prec_from_string(char *str)
+{
+  real digit_count = 0;
+  for (char *p = str; *p; p++)
+    if (isdigit(*p))  // KLUDGE
+      digit_count++;
+
+  return (int)ceil(digit_count * log(10) / log(2));
+}
+
+
+//-----------------------------------------------------------------------------
 // MAIN CONTROL
 
 public_function
@@ -75,18 +90,44 @@ int main (int arg_count, char *args[])
 
   if (arg_count - arg_index == 7)
   {
-    real    x_center             = atof(args[arg_index+0]);
-    real    y_center             = atof(args[arg_index+1]);
-    real    x_size               = atof(args[arg_index+2]);
-    uint64  iter_max             = atol(args[arg_index+3]);
-    int     pixel_width          = atoi(args[arg_index+4]);
-    int     pixel_height         = atoi(args[arg_index+5]);
-    int     subsample_scale      = atoi(args[arg_index+6]);
+    char *str_x_center         = args[arg_index+0];
+    char *str_y_center         = args[arg_index+1];
+    char *str_xy_min_size      = args[arg_index+2];
+    char *str_iter_max         = args[arg_index+3];
+    char *str_width_pixels     = args[arg_index+4];
+    char *str_height_pixels    = args[arg_index+5];
+    char *str_subsample_limit  = args[arg_index+6];
+
+    // Calculate minimum precision needed to represent values.
+    int mp_prec = 0;
+    mp_prec = MAX(mp_prec, 16 + mp_get_min_prec_from_string(str_x_center));
+    mp_prec = MAX(mp_prec, 16 + mp_get_min_prec_from_string(str_y_center));
+    mp_prec = MAX(mp_prec, 16 + mp_get_min_prec_from_string(str_xy_min_size));
+
+    mp_real x_center, y_center, xy_min_size;
+    mp_init2(x_center, mp_prec);
+    mp_init2(y_center, mp_prec);
+    mp_init2(xy_min_size, mp_prec);
+
+    mp_set_str(x_center, str_x_center, 10, MP_ROUND);
+    mp_set_str(y_center, str_y_center, 10, MP_ROUND);
+    mp_set_str(xy_min_size, str_xy_min_size, 10, MP_ROUND);
+
+    uint64  iter_max             = atol(str_iter_max);
+    int     width_pixels         = atoi(str_width_pixels);
+    int     height_pixels        = atoi(str_height_pixels);
+    int     subsample_limit      = atoi(str_subsample_limit);
     real    subsample_tolerance  = 0.5;
 
-    Image *image = image_create(x_center, y_center, x_size, iter_max,
-                                pixel_width, pixel_height,
-                                subsample_scale, subsample_tolerance);
+    Image *image = image_create(x_center, y_center, xy_min_size,
+                                width_pixels, height_pixels,
+                                subsample_limit, subsample_tolerance,
+                                iter_max);
+
+    mp_clear(x_center);
+    mp_clear(y_center);
+    mp_clear(xy_min_size);
+
     image_populate(image);
 
     if (output_statistics)

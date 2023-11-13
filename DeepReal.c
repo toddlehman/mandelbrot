@@ -4,9 +4,6 @@
 
 #import "DeepReal.h"
 
-//#include <gmp.h>
-#include <mpfr.h>
-
 
 //-----------------------------------------------------------------------------
 // USEFUL CONSTANTS
@@ -747,20 +744,20 @@ void dr_test(void)
   }
   dr_print(a); printf("\n");
 #else
-  mpfr_t a, x;
-  mpfr_init2(a, bits_deep);
-  mpfr_init2(x, bits_deep);
-  mpfr_set_d(a, 0, MPFR_RNDN);
-  mpfr_set_d(x, 1, MPFR_RNDN);
+  mp_real a, x;
+  mp_init2(a, bits_deep);
+  mp_init2(x, bits_deep);
+  mp_set_d(a, 0, MPFR_RNDN);
+  mp_set_d(x, 1, MPFR_RNDN);
   for (int i = 1; i <= bits_deep; i++)
   {
-    mpfr_add(a, a, x, MPFR_RNDN);
-    mpfr_div_ui(x, x, i, MPFR_RNDN);
+    mp_add(a, a, x, MPFR_RNDN);
+    mp_div_ui(x, x, i, MPFR_RNDN);
   }
-  mpfr_out_str(stdout, 10, 0, a, MPFR_RNDN);
+  mp_out_str(stdout, 10, 0, a, MPFR_RNDN);
   printf("\n");
-  mpfr_clear(x);
-  mpfr_clear(a);
+  mp_clear(x);
+  mp_clear(a);
 #endif
 }
 
