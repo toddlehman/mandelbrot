@@ -631,6 +631,13 @@ MandelbrotResult mandelbrot_compute_low_precision(
                    const real periodicity_epsilon,
                    const uint64 iter_max)
 {
+  #if 0  // KLUDGE for testing -- makes a grid.
+  if (((uint32)(int32)floor(cx) ^ (uint32)(int32)floor(cy)) & UINT32_C(1))
+    return (MandelbrotResult) { .dwell = 0, .iter = 0, .period = 0 };
+  else
+    return mandelbrot_result_interior_uniterated();
+  #endif
+
   // Early-out test for membership in main cardioid.
   if (cx >= -0.75)
   {

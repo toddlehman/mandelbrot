@@ -357,9 +357,12 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
     // Apply fading "fog" based on distance.  This is a quick hack KLUDGE.
     if (mandelbrot_result_is_exterior(mr))
     {
+      //real d = sqrt(pow(mp_get_d(x) - mp_get_d(this->camera->camera_x), 2) +
+      //              pow(mp_get_d(y) - mp_get_d(this->camera->camera_y), 2))
+      //           / (this->camera->target_camera_rho);
       real d = sqrt(pow(mp_get_d(x) - mp_get_d(this->camera->camera_x), 2) +
-                    pow(mp_get_d(y) - mp_get_d(this->camera->camera_y), 2))
-                 / this->camera->target_camera_rho;
+                    pow(mp_get_d(y) - mp_get_d(this->camera->camera_y), 2) +
+                    pow(0           - mp_get_d(this->camera->camera_z), 2));
       real t = atan(d) / (PI / 2);
       pixel.color = linear_rgb_lerp(
         pow(t, 12) * 0.7,

@@ -36,6 +36,7 @@ ALL_SRC =	$(H_FILES) \
 		mset_make_zoom \
 		mset_make_flyover \
 		mset_queue_runner \
+		mset_queue_eta \
 		mset_blend_frames \
                 mset_collate_stats \
 		Makefile
