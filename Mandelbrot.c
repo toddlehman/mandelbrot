@@ -137,13 +137,14 @@ Mandelbrot *mandelbrot_create(uint64 iter_max,
   this->stats.interior_probes = 0;
   this->stats.interior_probes_uniterated = 0;
   this->stats.interior_probes_aperiodic = 0;
+  this->stats.interior_period_min = 0;
+  this->stats.interior_period_max = 0;
 
   this->stats.exterior_iter = 0;
   this->stats.exterior_probes = 0;
   this->stats.exterior_probes_uniterated = 0;
-
-  this->stats.min_dwell = INFINITY;
-  this->stats.max_dwell = 0;
+  this->stats.exterior_dwell_min = NAN;
+  this->stats.exterior_dwell_max = NAN;
 
   assert(ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter) ==
          ELEMENT_COUNT(this->stats.exterior_probes_by_log2_iter));
@@ -655,20 +656,22 @@ MandelbrotResult mandelbrot_compute_low_precision(
   // Early-out test for membership in main cardioid.
   if (cx >= -0.75)
   {
+    const uint64 period = 1;
     real x = cx - 0.25;
     real y = x*x + cy*cy;
     x += y + y;
     if (x*x <= y)
-      return mandelbrot_result_interior_uniterated();
+      return mandelbrot_result_interior_uniterated_periodic(period);
   }
 
   // Early-out test for membership in largest disc, having center (-1,0) and
   // radius 1/4.
   else if (cx >= -1.25)
   {
+    const uint64 period = 2;
     real x = cx + 1.0;
     if (x*x + cy*cy <= 0.0625)  // Radius 1/4 squared is 1/16.
-      return mandelbrot_result_interior_uniterated();
+      return mandelbrot_result_interior_uniterated_periodic(period);
   }
 
   // Early-out test for x-axis.  This is actually very, very important because
@@ -680,10 +683,14 @@ MandelbrotResult mandelbrot_compute_low_precision(
   // Generation of that image went from a whoppingly embarrassing 14.7 CPU
   // hours down to 1.9 CPU seconds!  This is probably the single most useful
   // optimization I have ever seen in my entire programming career.
+  //
+  // Note that the probe is recorded here as being aperiodic even though it
+  // *might* be periodic.  This is not desirable, but the alternative (actually
+  // determining whether the point is periodic) is just too expensive.
   else if (cx >= -2.0)
   {
     if (cy == 0)  // Note: It is already known that cx < -1.25.
-      return mandelbrot_result_interior_uniterated();
+      return mandelbrot_result_interior_uniterated_aperiodic();
   }
 
   // Handle other cases with either periodicity checking or standard counting.
@@ -749,6 +756,7 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
   // Early-out test for membership in main cardioid.
   if (mp_greaterequal_p(cx, _n_0_75))       // if (cx >= -0.75)
   {
+    const uint64 period = 1;
     mp_sub_d(x, cx, 0.25);                  // x = cx - 0.25;
     mp_sqr(x2, x);                          //   x2 = x*x;
     mp_sqr(y2, cy);                         //   y2 = cy*cy;
@@ -757,18 +765,19 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
     mp_add(x, x, y);                        // x += y;
     mp_sqr(x2, x);                          //   x2 = x*x;
     if (mp_lessequal_p(x2, y))              // if (x*x <= y)
-      return mandelbrot_result_interior_uniterated();
+      return mandelbrot_result_interior_uniterated_periodic(period);
   }
 
   // Early-out test for membership in largest disc.
   else if (mp_greaterequal_p(cx, _n_1_25))  // if (cx >= -1.25)
   {
+    const uint64 period = 2;
     mp_add_d(x, cx, 1.0);                   // x = cx + 1.0;
     mp_sqr(x2, x);                          //   x2 = x*x;
     mp_sqr(y2, cy);                         //   y2 = cy*cy;
     mp_add(z2, x2, y2);                     //   z2 = x2 + y2;
     if (mp_lessequal_p(z2, _p_0_0625))      // if (x*x + cy*cy <= 0.0625)
-      return mandelbrot_result_interior_uniterated();
+      return mandelbrot_result_interior_uniterated_periodic(period);
   }
 
   // Early-out test for x-axis.
@@ -777,7 +786,7 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
     // Important note:  The remainder of this test assumes that cx < -1.25,
     // having already been tested above.
     if (mp_zero_p(cy))
-      return mandelbrot_result_interior_uniterated();
+      return mandelbrot_result_interior_uniterated_aperiodic();
   }
 
   // Handle other cases with periodicity checking.
@@ -872,12 +881,6 @@ MandelbrotResult mandelbrot_compute(Mandelbrot *this,
   this->stats.total_probes++;
   this->stats.total_probes_uniterated += (mr.iter == 0);
 
-  if (mr.dwell < this->stats.min_dwell)
-    this->stats.min_dwell = mr.dwell;
-
-  if (mr.dwell > this->stats.max_dwell)
-    this->stats.max_dwell = mr.dwell;
-
   if (mandelbrot_result_is_interior(mr))
   {
     this->stats.interior_iter += mr.iter;
@@ -887,15 +890,36 @@ MandelbrotResult mandelbrot_compute(Mandelbrot *this,
     {
       this->stats.interior_probes_uniterated++;
     }
-    else if (mandelbrot_result_is_interior_aperiodic(mr))
-    {
-      this->stats.interior_probes_aperiodic++;
-    }
     else
     {
-      uint log2_iter = (uint)floor(log2(mr.iter));
-      assert(log2_iter < ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter));
-      this->stats.interior_probes_by_log2_iter[log2_iter]++;
+      assert(mandelbrot_result_is_interior_iterated(mr));
+
+      if (mandelbrot_result_is_interior_aperiodic(mr))
+      {
+        this->stats.interior_probes_aperiodic++;
+      }
+      else
+      {
+        assert(mandelbrot_result_is_interior_periodic(mr));
+
+        assert(mr.iter > 0);
+        uint log2_iter = (uint)floor(log2(mr.iter));
+        assert(log2_iter <
+               ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter));
+        this->stats.interior_probes_by_log2_iter[log2_iter]++;
+      }
+    }
+
+    if (mandelbrot_result_is_interior_periodic(mr))
+       // Might be uniterated and that's okay!
+    {
+      if ((this->stats.interior_period_min == 0) ||
+          (mr.period < this->stats.interior_period_min))
+        this->stats.interior_period_min = mr.period;
+
+      if ((this->stats.interior_period_max == 0) ||
+          (mr.period > this->stats.interior_period_max))
+        this->stats.interior_period_max = mr.period;
     }
   }
   else
@@ -909,10 +933,20 @@ MandelbrotResult mandelbrot_compute(Mandelbrot *this,
     }
     else
     {
+      assert(mr.iter > 0);
       uint log2_iter = (uint)floor(log2(mr.iter));
-      assert(log2_iter < ELEMENT_COUNT(this->stats.exterior_probes_by_log2_iter));
+      assert(log2_iter <
+             ELEMENT_COUNT(this->stats.exterior_probes_by_log2_iter));
       this->stats.exterior_probes_by_log2_iter[log2_iter]++;
     }
+
+    if (isnan(this->stats.exterior_dwell_min) ||
+        (mr.dwell < this->stats.exterior_dwell_min))
+      this->stats.exterior_dwell_min = mr.dwell;
+
+    if (isnan(this->stats.exterior_dwell_max) ||
+        (mr.dwell > this->stats.exterior_dwell_max))
+      this->stats.exterior_dwell_max = mr.dwell;
   }
 
 

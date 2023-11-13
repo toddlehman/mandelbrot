@@ -408,14 +408,13 @@ real palette_map_dwell_to_color_location(const Palette *this,
 
     // Note to self:  This apperas to be best for a gigapixel or terapixel map.
     const float64 base = 200, cycle = 100;
-    const float64 black = 1.0 * this->map_zoom_level;
-    const float64 blue  = 1.5 * this->map_zoom_level;
 
-    if (f < 0)
-    {
-      ;
-    }
-    else if (f < black)
+    const float64 tightness = this->map_zoom_level;
+    float64 black = 1.0 * tightness;
+    float64 blue  = 1.5 * tightness;
+    if (black > blue - 4) black = blue - 4;
+
+    if (f < black)
     {
       f = -1;
     }

@@ -290,7 +290,17 @@ bool process_argument(MainControl *this, const char *str)
   }
   else if ((value = argument_matches(key, "--text")))
   {
-    this->output_image_text_format = true;
+    this->format_type = ImageFormat_ppm_text;
+    valid = true;
+  }
+  else if ((value = argument_matches(key, "--periods")))
+  {
+    this->color_type = ImageColor_period;
+    valid = true;
+  }
+  else if ((value = argument_matches(key, "--sample-density")))
+  {
+    this->color_type = ImageColor_sample_density;
     valid = true;
   }
 
@@ -332,15 +342,19 @@ int main (int arg_count, const char *args[])
 
   // --- Set program defaults.
 
-  mp_init2(this->julia_x,  32);
-  mp_init2(this->julia_y,  32);
-  mp_init2(this->target_x, 32);
-  mp_init2(this->target_y, 32);
+  this->world_type = ImageWorld_standard;
+  this->color_type = ImageColor_standard;
+  this->format_type = isatty(fileno(stdout))
+                        ? ImageFormat_ppm_text : ImageFormat_ppm_binary;
+  mp_init2(this->julia_x,     32);
+  mp_init2(this->julia_y,     32);
+  mp_init2(this->target_x,    32);
+  mp_init2(this->target_y,    32);
   mp_set_d(this->julia_x,     0.00);
   mp_set_d(this->julia_y,     0.00);
   mp_set_d(this->target_x,   -0.75);
   mp_set_d(this->target_y,    0.00);
-  this->target_camera_rho   = 2.0;
+  this->target_camera_rho   = 3.0;
   this->target_camera_theta = degrees_to_radians(0);
   this->target_camera_phi   = degrees_to_radians(0);
   this->camera_theta        = degrees_to_radians(0);
@@ -356,7 +370,6 @@ int main (int arg_count, const char *args[])
   this->supersample_exterior_max_depth = 0;
   this->supersample_solidarity = 0;
   this->output_statistics = false;
-  this->output_image_text_format = isatty(fileno(stdout));
 
 
   // --- Parse command line arguments.
@@ -400,7 +413,7 @@ int main (int arg_count, const char *args[])
 
   // KLUDGE for MAP_WORLD
   real map_full_size = 2.625;
-  real map_zoom_level = log2(map_full_size / this->target_camera_rho) - 2;
+  real map_zoom_level = log2(map_full_size / this->target_camera_rho);
 
   Palette *palette = palette_create(map_zoom_level);
 
@@ -425,7 +438,10 @@ int main (int arg_count, const char *args[])
     this->supersample_solidarity,
     this->iter_max,
     palette,
-    camera);
+    camera,
+    this->world_type,
+    this->color_type,
+    this->format_type);
 
   image_populate(image);
 
@@ -435,7 +451,7 @@ int main (int arg_count, const char *args[])
   if (this->output_statistics)
     image_output_statistics(image, stderr);
 
-  image_output(image, stdout, this->output_image_text_format);
+  image_output(image, stdout);
 
 
   // --- Clean up.

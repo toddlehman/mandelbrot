@@ -10,6 +10,10 @@
 
 typedef struct
 {
+  ImageWorldType   world_type;
+  ImageColorType   color_type;
+  ImageFormatType  format_type;
+
   // TODO:  These are currently unused.  They belong in the Mandelbrot
   // iteration object.
   mp_real  julia_x;
@@ -38,6 +42,5 @@ typedef struct
   float32  supersample_solidarity;
 
   bool     output_statistics;
-  bool     output_image_text_format;
 }
 MainControl;

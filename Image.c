@@ -21,7 +21,10 @@ Image *image_create(int width_pixels, int height_pixels,
                     float32 supersample_solidarity,
                     uint64 iter_max,
                     const Palette *palette,
-                    const Camera *camera)
+                    const Camera *camera,
+                    const ImageWorldType world_type,
+                    const ImageColorType color_type,
+                    const ImageFormatType format_type)
 {
   // FIXME:  Move these two assertions to initialization code for each of these
   // modules.
@@ -47,6 +50,10 @@ Image *image_create(int width_pixels, int height_pixels,
 
   this->camera = camera;
   this->palette = palette;
+
+  this->world_type = world_type;
+  this->color_type = color_type;
+  this->format_type = format_type;
 
 
   // --- Calculate floating-point precision required.
@@ -124,10 +131,14 @@ Image *image_create(int width_pixels, int height_pixels,
 
   this->interior_filler_pixel = (Pixel)
   {
-    .color                 = palette_color_from_mandelbrot_result(
-                               this->palette,
-                               mandelbrot_result_interior_uniterated()),
+    .color = palette_color_from_mandelbrot_result(
+               this->palette,
+               mandelbrot_result_interior_uniterated_periodic(0)),
+
+  #if 0  // OBSOLETE -- was only for proof-of-concept
     .displacement_3d       = 0.0,
+  #endif
+    .sample_density        = 0.0,
     .interior_portion      = 1.0,
     .is_defined            = true,
     .is_interior_periodic  = false,
@@ -195,6 +206,7 @@ bool image_pixel_needs_supersampling(const Image *this,
 //-----------------------------------------------------------------------------
 // COMPUTE PIXEL DISPLACEMENT FOR 3D RENDERING
 
+#if 0  // OBSOLETE -- was only for proof-of-concept
 private_method
 float32 image_compute_displacement_3d(const Image *this,
                                       const mp_real x,
@@ -245,6 +257,7 @@ float32 image_compute_displacement_3d(const Image *this,
 
   return displacement;
 }
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -341,11 +354,15 @@ Pixel image_compute_pixel(const Image *this, real i, real j,
 
     // Now compute pixel.
     if (is_known_interior)
-      mr = mandelbrot_result_interior_uniterated();
+      mr = mandelbrot_result_interior_uniterated_periodic(0);
     else
       mr = mandelbrot_compute(this->mandelbrot, x, y, e);
+    if (this->color_type == ImageColor_period) mr.dwell = mr.period; // KLUDGE
     pixel.color = palette_color_from_mandelbrot_result(this->palette, mr);
+  #if 0  // OBSOLETE -- was only for proof-of-concept
     pixel.displacement_3d = image_compute_displacement_3d(this, x, y, mr);
+  #endif
+    pixel.sample_density = 1 / pow(2, 2*this->supersample_max_depth);
     pixel.interior_portion = mandelbrot_result_is_interior(mr)? 1.0 : 0.0;
     pixel.is_defined = true;
     pixel.is_interior_periodic = mandelbrot_result_is_interior_periodic(mr);
@@ -371,7 +388,10 @@ Pixel image_compute_pixel(const Image *this, real i, real j,
   {
     mr = mandelbrot_result_exterior_uniterated(0);
     pixel.color = palette_color_from_sky_coefficient(this->palette, atmo_scat);
+  #if 0  // OBSOLETE -- was only for proof-of-concept
     pixel.displacement_3d = 0;
+  #endif
+    pixel.sample_density = 0;
     pixel.interior_portion = 0;
     pixel.is_defined = true;
     pixel.is_interior_periodic = false;
@@ -459,10 +479,18 @@ Pixel image_compute_supersampled_pixel(const Image *this,
   Pixel pixel;
   pixel.color = linear_rgb_average4(pixel_00.color, pixel_01.color,
                                     pixel_10.color, pixel_11.color);
+#if 0  // OBSOLETE -- was only for proof-of-concept
   pixel.displacement_3d = (pixel_00.displacement_3d +
                            pixel_01.displacement_3d +
                            pixel_10.displacement_3d +
                            pixel_11.displacement_3d) / 4;
+#endif
+
+  pixel.sample_density = pixel_00.sample_density +
+                         pixel_01.sample_density +
+                         pixel_10.sample_density +
+                         pixel_11.sample_density;
+
   pixel.interior_portion = (pixel_00.interior_portion +
                             pixel_01.interior_portion +
                             pixel_10.interior_portion +
@@ -728,6 +756,7 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
 //-----------------------------------------------------------------------------
 // APPLY 3-D DISPLACEMENT TO PIXELS AFTER POPULATING
 
+#if 0  // OBSOLETE -- was only for proof-of-concept
 private_method
 void image_apply_displacement_3d(Image *this)
 {
@@ -765,6 +794,7 @@ void image_apply_displacement_3d(Image *this)
     }
   }
 }
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -787,8 +817,11 @@ void image_populate(Image *this)
   // Return now if supersampling is not requested.
   if (!this->supersample)
   {
+  #if 0  // OBSOLETE -- was only for proof-of-concept
     // KLUDGE!!!! FIXME:  I don't like having this called twice in this routine.
     image_apply_displacement_3d(this);
+  #endif
+
     return;
   }
 
@@ -881,7 +914,37 @@ void image_populate(Image *this)
 #endif
 
   // Apply 3-D displacement to pixels.
+#if 0  // OBSOLETE -- was only for proof-of-concept
   image_apply_displacement_3d(this);
+#endif
+}
+
+
+//-----------------------------------------------------------------------------
+// GET PIXEL COLOR FOR OUTPUT
+
+private_method
+LinearRGB image_color_for_output(const Image *this, int i, int j)
+{
+  assert((i >= 0) && (i < this->di));
+  assert((j >= 0) && (j < this->dj));
+
+  const Pixel pixel = this->pixels[i][j];
+
+  if (this->color_type == ImageColor_sample_density)
+  {
+    assert(pixel.sample_density >= 0);
+    assert(pixel.sample_density <= 1);
+
+    const LinearRGB color = (LinearRGB){ .r = pixel.sample_density,
+                                         .b = pixel.sample_density,
+                                         .g = pixel.sample_density };
+    return color;
+  }
+  else
+  {
+    return pixel.color;
+  }
 }
 
 
@@ -889,7 +952,7 @@ void image_populate(Image *this)
 // OUTPUT IMAGE
 
 public_method
-void image_output(const Image *this, FILE *stream, bool text_format)
+void image_output(const Image *this, FILE *stream)
 {
   assert(this);
 
@@ -899,61 +962,83 @@ void image_output(const Image *this, FILE *stream, bool text_format)
     assert(this->pixels[i][j].is_defined);
   }
 
-  fprintf(stream, "%s\n", text_format? "P3" : "P6");
-  fprintf(stream, "%d %d\n", this->dj, this->di);
-  fprintf(stream, "%d\n", 255);
-
-  int buffer_byte_count = (text_format? strlen("000 000 000 ") : 3) *
-                          this->dj;
-  byte *buffer = mem_alloc_clear(buffer_byte_count, 1);
-
-  for (int i = 0; i < this->di; i++)
+  switch (this->format_type)
   {
-    byte *p = &buffer[0];
-
-    for (int j = 0; j < this->dj; j++)
+    case ImageFormat_ppm_binary:
     {
-      #if 0  // FOO
-      LinearRGB c = this->pixels[i][j].color;
-      for (int n = 0; n < 1; n++)
-      {
-        c.r = swerp(c.r, 0, 1);
-        c.g = swerp(c.g, 0, 1);
-        c.b = swerp(c.b, 0, 1);
-      }
-      this->pixels[i][j].color = c;
-      #endif
+      fprintf(stream, "%s\n", "P6");
+      fprintf(stream, "%d %d\n", this->dj, this->di);
+      fprintf(stream, "%d\n", 255);
 
-      DeviceRGB24 color = linear_rgb_to_device_rgb24(this->pixels[i][j].color);
+      int buffer_byte_count = 3 * this->dj;
+      byte *buffer = mem_alloc_clear(buffer_byte_count, 1);
 
-      if (text_format)
+      for (int i = 0; i < this->di; i++)
       {
-        // This is WAY faster than calling sprintf() zillions of times.
-        *p++ = '0' + ((color.r / 100) % 10);
-        *p++ = '0' + ((color.r /  10) % 10);
-        *p++ = '0' + ((color.r /   1) % 10);
-        *p++ = ' ';
-        *p++ = '0' + ((color.g / 100) % 10);
-        *p++ = '0' + ((color.g /  10) % 10);
-        *p++ = '0' + ((color.g /   1) % 10);
-        *p++ = ' ';
-        *p++ = '0' + ((color.b / 100) % 10);
-        *p++ = '0' + ((color.b /  10) % 10);
-        *p++ = '0' + ((color.b /   1) % 10);
-        *p++ = (j < this->dj - 1)? ' ' : '\n';
+        byte *p = &buffer[0];
+
+        for (int j = 0; j < this->dj; j++)
+        {
+          const DeviceRGB24 color = linear_rgb_to_device_rgb24(
+                                      image_color_for_output(this, i, j));
+          *p++ = color.r;
+          *p++ = color.g;
+          *p++ = color.b;
+        }
+
+        (void)fwrite(buffer, buffer_byte_count, 1, stream);
       }
-      else
-      {
-        *p++ = color.r;
-        *p++ = color.g;
-        *p++ = color.b;
-      }
+
+      free(buffer);
+      break;
     }
 
-    (void)fwrite(buffer, buffer_byte_count, 1, stream);
-  }
+    case ImageFormat_ppm_text:
+    {
+      fprintf(stream, "%s\n", "P3");
+      fprintf(stream, "%d %d\n", this->dj, this->di);
+      fprintf(stream, "%d\n", 255);
 
-  free(buffer);
+      int buffer_byte_count = strlen("000 000 000 ") * this->dj;
+      byte *buffer = mem_alloc_clear(buffer_byte_count, 1);
+
+      for (int i = 0; i < this->di; i++)
+      {
+        byte *p = &buffer[0];
+
+        for (int j = 0; j < this->dj; j++)
+        {
+          const DeviceRGB24 color = linear_rgb_to_device_rgb24(
+                                      image_color_for_output(this, i, j));
+
+          // This is WAY faster than calling sprintf() zillions of times.
+          *p++ = '0' + ((color.r / 100) % 10);
+          *p++ = '0' + ((color.r /  10) % 10);
+          *p++ = '0' + ((color.r /   1) % 10);
+          *p++ = ' ';
+          *p++ = '0' + ((color.g / 100) % 10);
+          *p++ = '0' + ((color.g /  10) % 10);
+          *p++ = '0' + ((color.g /   1) % 10);
+          *p++ = ' ';
+          *p++ = '0' + ((color.b / 100) % 10);
+          *p++ = '0' + ((color.b /  10) % 10);
+          *p++ = '0' + ((color.b /   1) % 10);
+          *p++ = (j < this->dj - 1)? ' ' : '\n';
+        }
+
+        (void)fwrite(buffer, buffer_byte_count, 1, stream);
+      }
+
+      free(buffer);
+      break;
+    }
+
+    default:
+    {
+      assert(false);
+      break;
+    }
+  }
 
   fflush(stream);
 }
@@ -1320,27 +1405,45 @@ void image_output_statistics(const Image *this, FILE *stream)
 
   fprintf(stream, "\n");
 
-  if (stats->min_dwell == INFINITY)
-    fprintf(stream,
-            "                 Minimum dwell: %19s\n",
-            "inf");
-  else
-    fprintf(stream,
-            "                 Minimum dwell: %23.3f\n",
-            stats->min_dwell);
-
-  if (stats->max_dwell == INFINITY)
-    fprintf(stream,
-            "                 Maximum dwell: %19s\n",
-            "inf");
-  else
-    fprintf(stream,
-            "                 Maximum dwell: %23.3f\n",
-            stats->max_dwell);
-
   fprintf(stream,
           "              All pixels black: %19s\n",
           all_pixels_black? "yes":"no");
+
+  if (stats->interior_period_min == 0)
+    fprintf(stream,
+            "       Minimum interior period: %19s\n",
+            "-");
+  else
+    fprintf(stream,
+            "       Minimum interior period: %19"PRIu64"\n",
+            stats->interior_period_min);
+
+  if (stats->interior_period_max == 0)
+    fprintf(stream,
+            "       Maximum interior period: %19s\n",
+            "-");
+  else
+    fprintf(stream,
+            "       Maximum interior period: %19"PRIu64"\n",
+            stats->interior_period_max);
+
+  if (isnan(stats->exterior_dwell_min))
+    fprintf(stream,
+            "        Minimum exterior dwell: %19s\n",
+            "-");
+  else
+    fprintf(stream,
+            "        Minimum exterior dwell: %23.3f\n",
+            stats->exterior_dwell_min);
+
+  if (isnan(stats->exterior_dwell_max))
+    fprintf(stream,
+            "        Maximum exterior dwell: %19s\n",
+            "-");
+  else
+    fprintf(stream,
+            "        Maximum exterior dwell: %23.3f\n",
+            stats->exterior_dwell_max);
 
   fprintf(stream, "\n");
 

@@ -30,7 +30,10 @@ typedef struct
 {
   LinearRGB  color;                    // 12 bytes
 
+#if 0  // OBSOLETE -- was only for proof-of-concept
   float32    displacement_3d;          //  4 bytes
+#endif
+  float32    sample_density;           //  4 bytes
 
   float32    interior_portion;         //  4 bytes
 

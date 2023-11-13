@@ -10,6 +10,32 @@
 
 
 //-----------------------------------------------------------------------------
+typedef enum
+{
+  ImageWorld_standard   = 0,
+  ImageWorld_planar     = 1,
+  ImageWorld_spherical  = 2,
+}
+ImageWorldType;
+
+//-----------------------------------------------------------------------------
+typedef enum
+{
+  ImageColor_standard        = 0,
+  ImageColor_period          = 1,
+  ImageColor_sample_density  = 2,
+}
+ImageColorType;
+
+//-----------------------------------------------------------------------------
+typedef enum
+{
+  ImageFormat_ppm_binary  = 0,
+  ImageFormat_ppm_text    = 1,
+}
+ImageFormatType;
+
+//-----------------------------------------------------------------------------
 #pragma pack(push, 8)
 
 typedef struct
@@ -37,6 +63,10 @@ typedef struct
   int      supersample_exterior_max_depth;
   int      supersample_max_depth;
   float32  supersample_solidarity;
+
+  ImageWorldType   world_type;
+  ImageColorType   color_type;
+  ImageFormatType  format_type;
 }
 Image;
 
@@ -55,7 +85,10 @@ extern_public_constructor
                       float32 supersample_solidarity,
                       uint64 iter_max,
                       const Palette *palette,
-                      const Camera *camera);
+                      const Camera *camera,
+                      ImageWorldType world_type,
+                      ImageColorType color_type,
+                      ImageFormatType format_type);
 
 extern_public_destructor
   void image_destroy(Image **this);
@@ -64,7 +97,7 @@ extern_public_method
   void image_populate(Image *this);
 
 extern_public_method
-  void image_output(const Image *this, FILE *stream, bool text_format);
+  void image_output(const Image *this, FILE *stream);
 
 extern_public_method
   void image_output_statistics(const Image *this, FILE *stream);

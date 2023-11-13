@@ -46,26 +46,26 @@ MandelbrotConfiguration;
 typedef struct
 {
   // For tracking both interior and exterior points.
-  uint64  total_iter;
-  uint64  total_probes;
-  uint64  total_probes_uniterated;
+  uint64   total_iter;
+  uint64   total_probes;
+  uint64   total_probes_uniterated;
 
   // For tracking interior points.
-  uint64  interior_iter;
-  uint64  interior_probes;
-  uint64  interior_probes_uniterated;
-  uint64  interior_probes_aperiodic;
-  uint64  interior_probes_by_log2_iter[64];
+  uint64   interior_iter;
+  uint64   interior_probes;
+  uint64   interior_probes_uniterated;
+  uint64   interior_probes_aperiodic;
+  uint64   interior_probes_by_log2_iter[64];
+  uint64   interior_period_min;
+  uint64   interior_period_max;
 
   // For tracking exterior points.
-  uint64  exterior_iter;
-  uint64  exterior_probes;
-  uint64  exterior_probes_uniterated;
-  uint64  exterior_probes_by_log2_iter[64];
-
-  // For tracking overall image complexity.
-  float64  min_dwell;
-  float64  max_dwell;
+  uint64   exterior_iter;
+  uint64   exterior_probes;
+  uint64   exterior_probes_uniterated;
+  uint64   exterior_probes_by_log2_iter[64];
+  float64  exterior_dwell_min;
+  float64  exterior_dwell_max;
 }
 MandelbrotResultStatistics;
 
@@ -186,7 +186,19 @@ MandelbrotResult mandelbrot_result_interior_iterated_aperiodic(const uint64 iter
 
 //-----------------------------------------------------------------------------
 public_inline_function
-MandelbrotResult mandelbrot_result_interior_uniterated(void)
+MandelbrotResult mandelbrot_result_interior_uniterated_periodic(const uint64 period)
+{
+  return (MandelbrotResult)
+  {
+    .dwell   = INFINITY,
+    .iter    = 0,
+    .period  = period,
+  };
+}
+
+//-----------------------------------------------------------------------------
+public_inline_function
+MandelbrotResult mandelbrot_result_interior_uniterated_aperiodic(void)
 {
   return (MandelbrotResult)
   {
