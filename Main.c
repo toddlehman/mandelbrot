@@ -82,10 +82,10 @@ int main (int arg_count, char *args[])
 
   if (output_statistics)
   {
-    printf("Command line:\n");
+    fprintf(stderr, "Command line:\n");
     for (int i = 0; i < arg_count; i++)
-      printf("%s%c", args[i], (i < arg_count - 1)? ' ':'\n');
-    printf("\n");
+      fprintf(stderr, "%s%c", args[i], (i < arg_count - 1)? ' ':'\n');
+    fprintf(stderr, "\n");
   }
 
   if (arg_count - arg_index == 8)
@@ -134,9 +134,9 @@ int main (int arg_count, char *args[])
     image_populate(image);
 
     if (output_statistics)
-      image_output_statistics(image);
-    else
-      image_output(image, output_text_format);
+      image_output_statistics(image, stderr);
+
+    image_output(image, stdout, output_text_format);
 
     image_destroy(&image);
   }

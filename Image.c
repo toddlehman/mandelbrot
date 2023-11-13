@@ -258,6 +258,15 @@ Pixel image_compute_subsampled_pixel(Image *this,
   Pixel pixel_10 = image_compute_pixel(this, i+(di/2), j);
   Pixel pixel_11 = image_compute_pixel(this, i+(di/2), j+(dj/2));
 
+  // Adjust required solidarity based on subsampling depth.  The deeper we go
+  // in subsampling, the sloppier we allow the results to be.  This is somewhat
+  // of a KLUDGE, but it seems to work okay and it allows the maximum subsample
+  // depth to be specified as infinite because it short-circuits that limit (as
+  // long as the value is not 1 to start with).
+  float32 required_solidarity = this->subsample_solidarity;
+  required_solidarity = 1 - ((1 - required_solidarity) *
+                             pow(2, current_subsample_depth));
+
   // Assess color variation.
   float32 solidarity = linear_rgb_solidarity4(pixel_00.color, pixel_01.color,
                                               pixel_10.color, pixel_11.color);
@@ -266,7 +275,8 @@ Pixel image_compute_subsampled_pixel(Image *this,
   // the pixel recursively (unless the subsample depth limit has already been
   // reached).
   bool subsample = (current_subsample_depth < this->subsample_min_depth) ||
-                   ((solidarity < this->subsample_solidarity) &&
+                   //((solidarity < this->subsample_solidarity) &&
+                   ((solidarity < required_solidarity) &&
                     (current_subsample_depth < this->subsample_max_depth));
   if (subsample)
   {
@@ -497,7 +507,7 @@ void image_populate(Image *this)
 // OUTPUT IMAGE
 
 public_method
-void image_output(Image *this, bool text_format)
+void image_output(Image *this, FILE *stream, bool text_format)
 {
   assert(this);
 
@@ -507,10 +517,9 @@ void image_output(Image *this, bool text_format)
     assert(pixel_is_defined(this->pixels[i][j]));
   }
 
-  printf("%s\n", text_format? "P3" : "P6");
-  printf("%d %d\n", this->dj, this->di);
-  printf("%d\n", 255);
-  fflush(stdout);  // Flush now so as not to conflict with unbuffered write().
+  fprintf(stream, "%s\n", text_format? "P3" : "P6");
+  fprintf(stream, "%d %d\n", this->dj, this->di);
+  fprintf(stream, "%d\n", 255);
 
   int buffer_byte_count = (text_format? strlen("000 000 000 ") : 3) *
                           this->dj;
@@ -559,7 +568,7 @@ void image_output(Image *this, bool text_format)
       }
     }
 
-    write(1, buffer, buffer_byte_count);
+    (void)fwrite(buffer, buffer_byte_count, 1, stream);
   }
 
   free(buffer);
@@ -580,7 +589,7 @@ void image_print_clean_real(real value)
     *p-- = '\0';
   if (*p == '.')
     *p-- = '\0';
-  printf("%s", buf);
+  fprintf("%s", buf);
 }
 #endif
 
@@ -589,7 +598,7 @@ void image_print_clean_real(real value)
 // OUTPUT IMAGE STATISTICS
 
 public_method
-void image_output_statistics(Image *this)
+void image_output_statistics(Image *this, FILE *stream)
 {
   assert(this);
 
@@ -654,11 +663,15 @@ void image_output_statistics(Image *this)
         {
           exterior_tally_uniterated++;
         }
+        #if 0  // OBSOLETE
         else if (mr.iter == this->mandelbrot->iter_max)
         {
+          // NOTE: This *can* occur due to loop unrolling, which occasionally
+          // may cause overage on the iterations.
           assert(false);  // This should never occur.
           exterior_tally_aperiodic++;
         }
+        #endif
         else
         {
           int k = (int)(log(mr.iter) / log(2));
@@ -684,41 +697,43 @@ void image_output_statistics(Image *this)
 
   uint64 total_iter = total_interior_iter + total_exterior_iter;
 
-  mp_printf("                     Center:  (%RNf,%RNf)\n",
-            this->x_center, this->y_center);
+  mp_fprintf(stream,
+             "                     Center:  (%RNf,%RNf)\n",
+             this->x_center, this->y_center);
 
-  mp_printf("                       Size:  (%RNf,%RNf)\n",
-            this->x_size, this->y_size);
+  mp_fprintf(stream,
+             "                       Size:  (%RNf,%RNf)\n",
+             this->x_size, this->y_size);
 
-  printf("         Maximum iterations:  %llu\n", this->mandelbrot->iter_max);
+  fprintf(stream, "         Maximum iterations:  %llu\n", this->mandelbrot->iter_max);
 
-  printf("                 Pixel size:  %d x %d\n", this->dj, this->di);
+  fprintf(stream, "                 Pixel size:  %d x %d\n", this->dj, this->di);
 
-  printf("      Subsampling min depth:  %d\n", this->subsample_min_depth);
-  printf("      Subsampling max depth:  %d\n", this->subsample_max_depth);
-  printf("     Subsampling solidarity:  %f\n", this->subsample_solidarity);
-  printf("\n");
+  fprintf(stream, "      Subsampling min depth:  %d\n", this->subsample_min_depth);
+  fprintf(stream, "      Subsampling max depth:  %d\n", this->subsample_max_depth);
+  fprintf(stream, "     Subsampling solidarity:  %f\n", this->subsample_solidarity);
+  fprintf(stream, "\n");
 
-  printf("               Total pixels: %20llu\n", total_pixels);
-  printf("      Total interior pixels: %20llu (%.1f%%)\n", total_interior_pixels,
-         (double)total_interior_pixels / (double)total_pixels * 100);
-  printf("      Total exterior pixels: %20llu (%.1f%%)\n", total_exterior_pixels,
-         (double)total_exterior_pixels / (double)total_pixels * 100);
-  printf("\n");
-  printf("           Total iterations: %20llu\n", total_iter);
-  printf("  Total interior iterations: %20llu (%.1f%%)\n", total_interior_iter,
-         (double)total_interior_iter / (double)total_iter * 100);
-  printf("  Total exterior iterations: %20llu (%.1f%%)\n", total_exterior_iter,
-         (double)total_exterior_iter / (double)total_iter * 100);
-  printf("\n");
+  fprintf(stream, "               Total pixels: %20llu\n", total_pixels);
+  fprintf(stream, "      Total interior pixels: %20llu (%.1f%%)\n", total_interior_pixels,
+          (double)total_interior_pixels / (double)total_pixels * 100);
+  fprintf(stream, "      Total exterior pixels: %20llu (%.1f%%)\n", total_exterior_pixels,
+          (double)total_exterior_pixels / (double)total_pixels * 100);
+  fprintf(stream, "\n");
+  fprintf(stream, "           Total iterations: %20llu\n", total_iter);
+  fprintf(stream, "  Total interior iterations: %20llu (%.1f%%)\n", total_interior_iter,
+          (double)total_interior_iter / (double)total_iter * 100);
+  fprintf(stream, "  Total exterior iterations: %20llu (%.1f%%)\n", total_exterior_iter,
+          (double)total_exterior_iter / (double)total_iter * 100);
+  fprintf(stream, "\n");
 
-  printf("         Average iterations: %20.3f\n",
-         (double)total_iter / (double)total_pixels);
-  printf("Average interior iterations: %20.3f\n",
-         (double)total_interior_iter / (double)total_interior_pixels);
-  printf("Average exterior iterations: %20.3f\n",
-         (double)total_exterior_iter / (double)total_exterior_pixels);
-  printf("\n");
+  fprintf(stream, "         Average iterations: %20.3f\n",
+          (double)total_iter / (double)total_pixels);
+  fprintf(stream, "Average interior iterations: %20.3f\n",
+          (double)total_interior_iter / (double)total_interior_pixels);
+  fprintf(stream, "Average exterior iterations: %20.3f\n",
+          (double)total_exterior_iter / (double)total_exterior_pixels);
+  fprintf(stream, "\n");
 
 
   char buf[100];
@@ -726,16 +741,16 @@ void image_output_statistics(Image *this)
 
   // Print periodic orbit table.
 
-  printf("%25s  %20s  %9s  %9s\n",
-         "Period detected after", "Quantity", "Percentage", "Percentile");
-  printf("%25s  %20s  %9s  %9s\n",
-         "---------------------", "--------", "----------", "----------");
+  fprintf(stream, "%25s  %20s  %9s  %9s\n",
+          "Period detected after", "Quantity", "Percentage", "Percentile");
+  fprintf(stream, "%25s  %20s  %9s  %9s\n",
+          "---------------------", "--------", "----------", "----------");
   int max_interior_k = (int)(log(this->mandelbrot->iter_max) / log(2));
   uint64 interior_tally_log2_running_total = 0;
 
   interior_tally_log2_running_total += interior_tally_uniterated;
   sprintf(buf, "%s %llu", "(early-out)", UINT64_C(0));
-  printf("%25s  %20llu  %9.6f%% %10.6f%%\n",
+  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     interior_tally_uniterated,
     (double)interior_tally_uniterated / (double)total_interior_pixels * 100,
@@ -743,7 +758,7 @@ void image_output_statistics(Image *this)
   for (int k = 0; k <= max_interior_k; k++)
   {
     interior_tally_log2_running_total += interior_tally_log2[k];
-    printf("%25llu  %20llu  %9.6f%% %10.6f%%\n",
+    fprintf(stream, "%25llu  %20llu  %9.6f%% %10.6f%%\n",
       UINT64_C(1) << k,
       interior_tally_log2[k],
       (double)interior_tally_log2[k] / (double)total_interior_pixels * 100,
@@ -751,25 +766,25 @@ void image_output_statistics(Image *this)
   }
   interior_tally_log2_running_total += interior_tally_aperiodic;
   sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
-  printf("%25s  %20llu  %9.6f%% %10.6f%%\n",
+  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     interior_tally_aperiodic,
     (double)interior_tally_aperiodic / (double)total_interior_pixels * 100,
     (double)interior_tally_log2_running_total / (double)total_interior_pixels * 100);
-  printf("\n");
+  fprintf(stream, "\n");
 
   // Print escaped-point table.
 
-  printf("%25s  %20s  %9s  %9s\n",
-         "Escaped after", "Quantity", "Percentage", "Percentile");
-  printf("%25s  %20s  %9s  %9s\n",
-         "-------------", "--------", "----------", "----------");
+  fprintf(stream, "%25s  %20s  %9s  %9s\n",
+          "Escaped after", "Quantity", "Percentage", "Percentile");
+  fprintf(stream, "%25s  %20s  %9s  %9s\n",
+          "-------------", "--------", "----------", "----------");
   int max_exterior_k = (int)(log(this->mandelbrot->iter_max) / log(2));
   uint64 exterior_tally_log2_running_total = 0;
 
   exterior_tally_log2_running_total += exterior_tally_uniterated;
   sprintf(buf, "%s %llu", "(early-out)", UINT64_C(0));
-  printf("%25s  %20llu  %9.6f%% %10.6f%%\n",
+  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     exterior_tally_uniterated,
     (double)exterior_tally_uniterated / (double)total_exterior_pixels * 100,
@@ -777,7 +792,7 @@ void image_output_statistics(Image *this)
   for (int k = 0; k <= max_exterior_k; k++)
   {
     exterior_tally_log2_running_total += exterior_tally_log2[k];
-    printf("%25llu  %20llu  %9.6f%% %10.6f%%\n",
+    fprintf(stream, "%25llu  %20llu  %9.6f%% %10.6f%%\n",
       UINT64_C(1) << k,
       exterior_tally_log2[k],
       (double)exterior_tally_log2[k] / (double)total_exterior_pixels * 100,
@@ -785,7 +800,7 @@ void image_output_statistics(Image *this)
   }
   exterior_tally_log2_running_total += exterior_tally_aperiodic;
   sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
-  printf("%25s  %20llu  %9.6f%% %10.6f%%\n",
+  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
     buf,
     exterior_tally_aperiodic,
     (double)exterior_tally_aperiodic / (double)total_exterior_pixels * 100,

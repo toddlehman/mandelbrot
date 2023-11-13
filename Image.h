@@ -57,8 +57,8 @@ extern_public_method
   void image_populate(Image *this);
 
 extern_public_method
-  void image_output(Image *this, bool text_format);
+  void image_output(Image *this, FILE *stream, bool text_format);
 
 extern_public_method
-  void image_output_statistics(Image *this);
+  void image_output_statistics(Image *this, FILE *stream);
 

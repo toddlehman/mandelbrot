@@ -28,7 +28,12 @@ O_FILES =	$(MODULES:%=%.o)
 
 LIBS =
 
-ALL_SRC =	$(H_FILES) $(C_FILES) Makefile
+ALL_SRC =	$(H_FILES) \
+		$(C_FILES) \
+		mset_image \
+		mset_zoom_make \
+		mset_queue_runner \
+		Makefile
 
 SNAPSHOT =	snapshot.tar.gz
 
