@@ -1022,10 +1022,12 @@ float64 percentage(uint64 numerator, uint64 denominator)
 private_function
 char *special_format_mp_real(const mp_real x, const bool sign)
 {
+#if USE_MPFR
+
   // Calculate bits of precision to the right of the decimal point by
   // subtracting the bits of precision to the left of the decimal point from
   // the total bits of precision.
-  double x_trunc = floor(abs(mp_get_d(x)));
+  double x_trunc = floor(fabs(mp_get_d(x)));
   int bits_left = (x_trunc >= 1)? (int)ceil(log2(x_trunc)) : 0;
   int bits_right = mp_get_prec(x) - bits_left;
   int digits_right = floor((double)bits_right / log2(10));
@@ -1046,6 +1048,13 @@ char *special_format_mp_real(const mp_real x, const bool sign)
               sign? "%+RNE" : "%RNE",
               x);
   #endif
+
+#else
+
+  static char str[100];
+  snprintf(str, ELEMENT_COUNT(str), sign? "%+.16Lf":"%.16Lf", x);
+
+#endif
 
   return str;  // Not thread-safe; be careful!
 }
@@ -1149,22 +1158,22 @@ void image_output_statistics(const Image *this, FILE *stream)
           "         MP precision required:  %d bits\n",
           conf->mp_prec);
 
-  mp_fprintf(stream,
-             "                      Center x:  %s\n",
-             special_format_mp_real(this->camera->target_x, true));
+  fprintf(stream,
+          "                      Center x:  %s\n",
+          special_format_mp_real(this->camera->target_x, true));
 
-  mp_fprintf(stream,
-             "                      Center y:  %s\n",
-             special_format_mp_real(this->camera->target_y, true));
+  fprintf(stream,
+          "                      Center y:  %s\n",
+          special_format_mp_real(this->camera->target_y, true));
 
 #if 0  // OBSOLETE -- FIXME
-  mp_fprintf(stream,
-             "                        Size x:  %s\n",
-             special_format_mp_real(this->x_size, false));
+  fprintf(stream,
+          "                        Size x:  %s\n",
+          special_format_mp_real(this->x_size, false));
 
-  mp_fprintf(stream,
-             "                        Size y:  %s\n",
-             special_format_mp_real(this->y_size, false));
+  fprintf(stream,
+          "                        Size y:  %s\n",
+          special_format_mp_real(this->y_size, false));
 #endif
 
   fprintf(stream,

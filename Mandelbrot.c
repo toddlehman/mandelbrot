@@ -80,7 +80,7 @@
 // ESCAPE/BAILOUT PARAMETERS
 
 // An escape radius of 4 is ok, but 16 is much better for smooth coloring.
-private_static const real ESCAPE_RADIUS          = 16.0;
+//private_static const real ESCAPE_RADIUS          = 16.0;
 private_static const real ESCAPE_RADIUS_SQUARED  = 256.0;
 private_static const real LOG2_ESCAPE_RADIUS     = 2.77258872223978;
 
@@ -294,8 +294,8 @@ uint64 next_iteration_interval(uint64 iter, uint64 iter_max)
   uint64 i, i_base = 0;
   for (i = 0; (i < i_max) && ((x2=x*x) + (y2=y*y) <= r2); i++)
   {
-    if ((fabs(x - x_base) <= periodicity_epsilon) &&
-        (fabs(y - y_base) <= periodicity_epsilon))
+    if ((fabs((double)(x - x_base)) <= periodicity_epsilon) &&
+        (fabs((double)(y - y_base)) <= periodicity_epsilon))
     {
       return mandelbrot_result_interior_iterated_periodic(i, i - i_base);
     }
@@ -342,7 +342,8 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon_old(
 
       y = x * y; y += y + cy; x = x2 - y2 + cx; i++;
 
-      if ((fabs(x - x_base) <= epsilon) && (fabs(y - y_base) <= epsilon))
+      if ((fabs((double)(x - x_base)) <= epsilon) &&
+          (fabs((double)(y - y_base)) <= epsilon))
         return mandelbrot_result_interior_iterated_periodic(i, i - i_base);
     }
 
@@ -399,13 +400,13 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
     #if defined(EPSILON_SQUARE)  // Square neighborhood using L1 norm.
       #define  CHECK  \
         cycle_detected |= \
-          (fabs(x - x_base) <= epsilon) && \
-          (fabs(y - y_base) <= epsilon);
+          (fabs((double)(x - x_base)) <= epsilon) && \
+          (fabs((double)(y - y_base)) <= epsilon);
     #elif defined(EPSILON_ROUND)  // Round neighborhood using L2 norm.
       #define  CHECK  \
         cycle_detected |= \
-          (fabs(x - x_base) <= epsilon) && \
-          (fabs(y - y_base) <= epsilon) && \
+          (fabs((double)(x - x_base)) <= epsilon) && \
+          (fabs((double)(y - y_base)) <= epsilon) && \
           ((x-x_base)*(x-x_base) + (y-y_base)*(y-y_base) <= epsilon2)
     #elif defined(EPSILON_ROUND2)  // Round neighborhood using L2 norm.
       #define  CHECK  \

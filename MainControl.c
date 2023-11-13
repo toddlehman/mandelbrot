@@ -11,7 +11,6 @@
 
 #import "Common.h"
 #import "Memory.h"
-#import "DeepReal.h"
 #import "MPReal.h"
 #import "RGB.h"
 #import "Palette.h"
@@ -308,7 +307,6 @@ void print_struct_sizes(void)
     fprintf(stderr, "sizeof(%s) = %d\n", #x, (int)sizeof(x));
 
   PRINT_STRUCT_SIZE(mp_real);
-  PRINT_STRUCT_SIZE(DeepReal);
   PRINT_STRUCT_SIZE(LinearRGB);
   PRINT_STRUCT_SIZE(DeviceRGB48);
   PRINT_STRUCT_SIZE(DeviceRGB24);

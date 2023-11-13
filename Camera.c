@@ -147,7 +147,7 @@ private_method
 void camera_sphere_to_argand(const Camera *this, Vector3 s, real *a, real *b)
 {
   assert(this);
-  assert(fabs(vector3_magnitude(s) - 1) < 0.000001);
+  assert(fabs((double)vector3_magnitude(s) - 1) < 0.000001);
   assert(a); assert(b);
 
   real oy = atan2(s.x, s.z);
@@ -212,7 +212,8 @@ bool camera_intersect_ray_with_sphere(const Camera *this,
     {
       *sphere_point = vector3_sum(point, vector3_scaled(ray, distance));
       // Verify that the point is indeed on the sphere.
-      assert(fabs(vector3_magnitude(*sphere_point) - sphere_radius) < 0.000001);
+      assert(fabs((double)(vector3_magnitude(*sphere_point) - sphere_radius))
+             < 0.000001);
       return true;
     }
     else
@@ -301,12 +302,15 @@ real camera_distance_to_line_from_origin(const Camera *this,
 //
 // ENTRY:  u and v are viewport coordinates, typically in the interval
 //          [-1,+1] for each axis.
+//         x and y point to the desired Argand plane coordinates.
+//         atmo_scat points to the desired atmospheric scattering parameter.
+//          (Set this to null if this value is unneeded.)
 //
 // EXIT:   Returns a success code.
 //           true   *x and *y contain the Argand plane coordinates.
 //           false  *x and *y are undefined; the point is outside the plane.
-//         *atmo_scat contains the distance traveled through atmosphere (valid
-//           regardless of success code), or NULL if this value is unneeded.
+//         If atmo_scat was non-null on entry, *atmo_scat contains the distance
+//          traveled through atmosphere (valid regardless of the return value).
 //
 public_method
 bool camera_get_argand_point(const Camera *this,
@@ -368,11 +372,24 @@ bool camera_get_argand_point(const Camera *this,
   if ((position.z > 0) && (ray.z < 0))
   {
     real t = unlerp(0, position.z, position.z + ray.z);
-    mp_set_d(*x, lerp(t, position.x, position.x + ray.x));
-    mp_set_d(*y, lerp(t, position.y, position.y + ray.y));
+    real x_t = lerp(t, position.x, position.x + ray.x);
+    real y_t = lerp(t, position.y, position.y + ray.y);
+    mp_set_d(*x, x_t);
+    mp_set_d(*y, y_t);
     //fprintf(stderr, "(u,v)=(%f,%f) (x,y)=(%f,%f)\n",
-    //        (double)u, (double)v,
-    //        mp_get_d(*x), mp_get_d(*y));
+    //        (double)u, (double)v, (double)x_t, (double)y_t);
+    unless (atmo_scat == NULL)
+    {
+      // Note to self:  This calculation isn't very good.  If flat worlds are
+      // ever actually desired, this should be revisited.
+      real ray_xy = sqrt(pow(position.x - x_t, 2) +
+                         pow(position.y - y_t, 2) +
+                         pow(position.z - 0,   2));
+      real damper = 5;
+      *atmo_scat = atan(ray_xy / damper) / (PI / 2);
+      //fprintf(stderr, "ray_xy:%f atmo_scat:%f\n",
+      //        (double)ray_xy, (double)*atmo_scat);
+    }
     return true;
   }
   else
@@ -384,9 +401,16 @@ bool camera_get_argand_point(const Camera *this,
 
     // This is a big fat KLUDGE.
     // FIXME:  This is probably no longer workable for flat world.
-    real xy = sqrt((ray.x * ray.x) + (ray.y * ray.y));
     unless (atmo_scat == NULL)
-      *atmo_scat = (PI / 2) - atan(ray.z / xy);
+    {
+      // Note to self:  Surprisingly, this calculation turns out to look pretty
+      // nice -- especially for square images looking almost horizontally (i.e.,
+      // where the sky becomes deep blue at the top).
+      real ray_xy = sqrt((ray.x * ray.x) + (ray.y * ray.y));
+      *atmo_scat = 1 - atan(ray.z / ray_xy) / (PI / 2);
+      //fprintf(stderr, "ray_xy:%f atmo_scat:%f\n",
+      //        (double)ray_xy, (double)*atmo_scat);
+    }
 
     return false;
   }

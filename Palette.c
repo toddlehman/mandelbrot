@@ -83,7 +83,7 @@ Palette *palette_create(void)
   this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
 #elif 0
   // Classic popular blue->white->yellow->brown->black cycle.  This needs
-  // tuning.  I tried to replice the look of the very nice colors seen here
+  // tuning.  I tried to replicate the look of the very nice colors seen here
   // but didn't manage to do a good job of it:
   // http://www.misterx.ca/Mandelbrot_Set/M_Set-IMAGES_&_WALLPAPER.html
   this->exterior_locations[i] = 0.00;
@@ -343,6 +343,9 @@ real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
 
   #elif 1  // Logarithmic
 
+    // Note to self:  This is what I've been using for spherical/planetary
+    // zooms.  Looks quite good for that use.
+
     const float64 offset = 50, base = 1.5, power = 1, cycle = 4;
 
     f = (log(offset + f) - log(offset)) / log(base);
@@ -351,10 +354,14 @@ real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
 
   #elif 0  // Square root
 
+    // Note to self:  This might be best for a gigapixel or terapixel map.
+    // This is what I used (with a cycle of 100) when I generated the
+    // 24-gigapixel map in October 2013.
+
     //const float64 base = 400, cycle = 240;   // Nice but too tame.
     //const float64 base = 300, cycle = 180;   // Nicer in some cases.
-    //const float64 base = 200, cycle = 100;   // Pretty good overall.
-    const float64 base = 200, cycle = 120;  // Best overall, I think.
+    const float64 base = 200, cycle = 100;   // Pretty good overall.
+    //const float64 base = 200, cycle = 120;  // Best overall, I think.
 
     //if (f < 0) f = 0;
     //assert(f >= 0);

@@ -2,8 +2,15 @@
 #  Copyright (c) 2013 by Todd S. Lehman.  All rights reserved.
 #------------------------------------------------------------------------------
 
-COMPILE =	cc -I/opt/local/include -Wall -std=c11 -O4
-LINK =		cc -L/opt/local/lib -lmpfr
+USE_MPFR =	1
+
+COMPILE =	cc -Wall -std=c11 -O3
+LINK =		cc
+
+ifeq ($(USE_MPFR), 1)
+	COMPILE += -I/opt/local/include -DUSE_MPFR
+	LINK +=	-L/opt/local/lib -lmpfr
+endif
 
 #------------------------------------------------------------------------------
 
@@ -80,6 +87,7 @@ snapshot.tar.gz:	$(ALL_SRC)
 
 mset_image:	$(O_FILES)
 	@echo Linking $@
+	@sleep 1  # So that target has most recent timestamp.
 	@$(LINK) -o $@ $(O_FILES)
 
 .c.o:

@@ -9,6 +9,8 @@
 // Include MPFR multiprecision floating-point library and modify its interface
 // to be a bit cleaner.
 
+#if USE_MPFR  // (Manifest constant defined in Makefile)
+
 #import <mpfr.h>
 
 
@@ -366,6 +368,48 @@ typedef  mpfr_t  mp_real;
 #define  mp_nanflag_p                  mpfr_nanflag_p
 #define  mp_inexflag_p                 mpfr_inexflag_p
 #define  mp_erangeflag_p               mpfr_erangeflag_p
+
+#else
+
+// If not actually using MPFR, then emulate it by direct floating-point
+// arithmetic statements.
+
+typedef  long double  mp_real;
+
+#define  mp_init2(a,b)           assert((b) <= 80), (a) = 0
+#define  mp_clear(a)             (a) = 0
+#define  mp_get_prec(a)          64
+#define  mp_set(a,b)             (a) = (b);
+#define  mp_set_d(a,b)           (a) = (mp_real)(b)
+#define  mp_set_str(a,b,c)       assert((c) == 10), (a) = strtold((b), NULL)
+#define  mp_get_d(a)             (double)(a)
+#define  mp_add(a,b,c)           (a) = (b) + (c)
+#define  mp_add_d(a,b,c)         (a) = (b) + (mp_real)(c)
+#define  mp_sub(a,b,c)           (a) = (b) - (c)
+#define  mp_sub_d(a,b,c)         (a) = (b) - (mp_real)(c)
+#define  mp_mul(a,b,c)           (a) = (b) * (c)
+#define  mp_mul_d(a,b,c)         (a) = (b) * (mp_real)(c)
+#define  mp_div(a,b,c)           (a) = (b) / (c)
+#define  mp_div_d(a,b,c)         (a) = (b) / (mp_real)(c)
+#define  mp_sqr(a,b)             (a) = (b) * (b)
+#define  mp_sqrt(a,b)            (a) = sqrtl(b);
+#define  mp_log2(a,b)            (a) = log2l(b);
+#define  mp_abs(a,b)             (a) = fabsl(b);
+#define  mp_sgn(a)               (((a) > 0) - ((a) < 0))
+#define  mp_nan_p(a)             isnan(a)
+#define  mp_inf_p(a)             isinf(a)
+#define  mp_zero_p(a)            ((a) == 0)
+#define  mp_equal_p(a,b)         ((a) == (b))
+#define  mp_greater_p(a,b)       ((a) >  (b))
+#define  mp_greaterequal_p(a,b)  ((a) >= (b))
+#define  mp_less_p(a,b)          ((a) <  (b))
+#define  mp_lessequal_p(a,b)     ((a) <= (b))
+
+//#define  mp_fprintf              ()
+//#define  mp_printf               ()
+//#define  mp_snprintf             ()
+
+#endif
 
 
 //-----------------------------------------------------------------------------

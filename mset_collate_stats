@@ -20,7 +20,7 @@ sub special_format_big_number ($)
   my ($n) = @_;
 
   my @units = qw(ones thousand million billion trillion quadrillion
-                 quintrillion sextillion septillion octillion);
+                 quintillion sextillion septillion octillion);
 
   my $f = $n;
   my $unit_index;
