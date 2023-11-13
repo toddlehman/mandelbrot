@@ -23,6 +23,36 @@ Palette *palette_create(void)
 
   int i = 0;
 #if 0
+  // Really great all-purpose palette.  Same as below but normalized for
+  // maximum brightness.
+  this->exterior_locations[i] = 0.00;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.16, 0.89 };  // Blue
+  this->exterior_locations[i] = 0.10;
+  this->exterior_colors[i++] = (LinearRGB) { 0.32, 0.00, 0.42 };  // Purple
+  this->exterior_locations[i] = 0.20;
+  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.00, 0.00 };  // Red
+  this->exterior_locations[i] = 0.50;
+  this->exterior_colors[i++] = (LinearRGB) { 1.00, 0.84, 0.00 };  // Yellow
+  this->exterior_locations[i] = 0.80;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.74, 0.03 };  // Green
+  this->exterior_locations[i] = 0.90;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.42, 0.63 };  // Teal
+#elif 1
+  // Really great all-purpose palette.  Finely tuned.
+  this->exterior_locations[i] = 0.00;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.15, 0.85 };  // Blue
+  //this->exterior_colors[i++] = (LinearRGB) { 0.10, 0.15, 0.95 };  // Blue (too bright)
+  this->exterior_locations[i] = 0.10;
+  this->exterior_colors[i++] = (LinearRGB) { 0.30, 0.00, 0.40 };  // Purple
+  this->exterior_locations[i] = 0.20;
+  this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
+  this->exterior_locations[i] = 0.50;
+  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
+  this->exterior_locations[i] = 0.80;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.70, 0.02 };  // Green
+  this->exterior_locations[i] = 0.90;
+  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.40, 0.60 };  // Teal
+#elif 0
   // Simple, excellent monochrome palette showing lots and lots of detail.
   // A bit boring, though, since there's no color.
   this->exterior_locations[i] = 0.00;
@@ -63,23 +93,8 @@ Palette *palette_create(void)
   this->exterior_colors[i++] = (LinearRGB) { 0.40, 0.08, 0.04 };  // Brown
   this->exterior_locations[i] = 0.70;
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.00, 0.00 };  // Black
-#elif 1
-  // Really great all-purpose palette.  Finely tuned.
-  this->exterior_locations[i] = 0.00;
-  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.15, 0.85 };  // Blue
-  //this->exterior_colors[i++] = (LinearRGB) { 0.10, 0.15, 0.95 };  // Blue (too bright)
-  this->exterior_locations[i] = 0.10;
-  this->exterior_colors[i++] = (LinearRGB) { 0.30, 0.00, 0.40 };  // Purple
-  this->exterior_locations[i] = 0.20;
-  this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
-  this->exterior_locations[i] = 0.50;
-  this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
-  this->exterior_locations[i] = 0.80;
-  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.70, 0.02 };  // Green
-  this->exterior_locations[i] = 0.90;
-  this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.40, 0.60 };  // Teal
-#elif 1
-  // Great all-purpose palette.
+#elif 0
+  // Great all-purpose palette.  Needed work, though, so I abandoned it.
   this->exterior_locations[i] = 0.00;
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.15, 0.85 };  // Blue
   this->exterior_locations[i] = 0.14;
@@ -245,13 +260,39 @@ real palette_map_dwell_to_color_location(Palette *this, float64 dwell)
 {
   float64 f = dwell;
 
-  // **** TODO **** Try f = atan(dwell) / (PI/2) or something involving that.
-
-  #if 0
+  #if 0  // Naive way -- no good -- too many cycles.
 
     f = fmod(f, 200.0) / 200.0;
 
-  #elif 1
+  #elif 0  // Logarithmic
+
+    const float64 offset = 128, cycle = 6;//2.5;
+
+    f = log2(offset + f) - log2(offset);
+    f = fmod(f, cycle) / cycle;
+
+  #elif 0  // Logarithmic combined with root
+
+    const float64 offset = 128, base = 1.5, cycle = 6;
+
+    f = (log(offset + f) - log(offset)) / log(base);
+    f = sqrt(f);
+    f = fmod(f, cycle) / cycle;
+
+  #elif 1  // Logarithmic
+
+    const float64 offset = 50, base = 1.5, power = 1, cycle = 4;
+
+    f = (log(offset + f) - log(offset)) / log(base);
+    f = pow(f, power);
+    f = fmod(f, cycle) / cycle;
+
+  #elif 0  // Square root
+
+    //const float64 base = 400, cycle = 240;   // Nice but too tame.
+    //const float64 base = 300, cycle = 180;   // Nicer in some cases.
+    //const float64 base = 200, cycle = 100;   // Pretty good overall.
+    const float64 base = 200, cycle = 120;  // Best overall, I think.
 
     //if (f < 0) f = 0;
     //assert(f >= 0);
@@ -259,24 +300,24 @@ real palette_map_dwell_to_color_location(Palette *this, float64 dwell)
     {
       ;
     }
-    else if (f < 200)
+    else if (f < base)
     {
-      f = f / 200;
+      f = f / base;
     }
     else
     {
-      f -= 200;
+      f -= base;
       f = pow(f, 0.5);
-      f = fmod(f, 100.0) / 100.0;
+      f = fmod(f, cycle) / cycle;
     }
 
-  #elif 0
+  #elif 0  // Nice for certain deep zooms, but bad around Minibrot fringes
 
-    f = log(f) / log(1.5); f = fmod(f, 8) / 8;
+    //const float64 power = 0.25, cycle = 2;
+    const float64 power = 0.8, cycle = 200;
 
-  #elif 0
-
-    f = pow(f, 0.25); f = fmod(f, 2) / 2;
+    f = pow(f, power);
+    f = fmod(f, cycle) / cycle;
 
   #endif
 
