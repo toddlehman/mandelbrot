@@ -58,3 +58,8 @@ extern_public_method
                                mp_real *x, mp_real *y,
                                real *sky_angle);
 
+extern_public_method
+  bool camera_get_viewport_point(const Camera *this,
+                                 mp_real x, mp_real y, mp_real z,
+                                 real *u, real *v);
+

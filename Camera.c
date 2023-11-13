@@ -112,7 +112,7 @@ bool camera_get_argand_point(const Camera *this,
   // numbers (e.g., real).  It needs to be upgraded to work with mp_real.
 
 
-  // --- Transform viewport coordinates.
+  // --- Transform viewport coordinates for camera tilt rotation.
   {
     Vector3 viewport = { .x = u, .y = v, .z = 0 };
     viewport = vector3_rotated_z(viewport, this->viewport_tilt);
@@ -179,4 +179,80 @@ bool camera_get_argand_point(const Camera *this,
     return false;
   }
 }
+
+
+//-----------------------------------------------------------------------------
+// MAP 3-D COORDINATES TO VIEWPORT COORDINATES
+
+#if 0
+public_method
+bool camera_get_viewport_point(const Camera *this,
+                               mp_real x, mp_real y, mp_real z,
+                               real *u, real *v)
+{
+  assert(this); assert(u); assert(v);
+
+  // FIXME:  This routine only works for standard-precision floating-point
+  // numbers (e.g., real).  It needs to be upgraded to work with mp_real.
+
+
+  // --- Compute viewport radius from distance and field-of-view.
+
+  real viewport_radius = tan(this->viewport_fov / 2) * this->target_camera_rho;
+
+
+  // --- Start with camera position.
+
+  Vector3 position =
+  {
+    .x = mp_get_d(this->camera_x),
+    .y = mp_get_d(this->camera_y),
+    .z = mp_get_d(this->camera_z)
+  };
+
+
+  // --- Cast a ray from the camera to the viewport, using the camera's
+  //     orientation (given by 2 of 3 Euler angles).
+
+  Vector3 ray =
+  {
+    .x = u * viewport_radius,
+    .y = v * viewport_radius,
+    .z = -this->target_camera_rho
+  };
+
+  ray = vector3_rotated_x(ray, this->target_camera_phi);
+  ray = vector3_rotated_z(ray, this->target_camera_theta);
+
+
+  // --- Extend the ray to meet the Argand plane and note the coordinates of
+  //     intersection.
+
+  if ((position.z > 0) && (ray.z < 0))
+  {
+    real t = unlerp(0, position.z, position.z + ray.z);
+    mp_set_d(*x, lerp(t, position.x, position.x + ray.x));
+    mp_set_d(*y, lerp(t, position.y, position.y + ray.y));
+    //fprintf(stderr, "(u,v)=(%f,%f) (x,y)=(%f,%f)\n",
+    //        (double)u, (double)v,
+    //        mp_get_d(*x), mp_get_d(*y));
+    return true;
+  }
+  else
+  {
+    mp_set_d(*x, 0);
+    mp_set_d(*y, 0);
+    //fprintf(stderr, "(u,v)=(%f,%f) (x,y)=(undef,undef)\n",
+    //        (double)u, (double)v);
+    #if 0  // OBSOLETE
+    return false;
+    #endif
+
+    // This is a big fat KLUDGE.
+    real xy = sqrt((ray.x * ray.x) + (ray.y * ray.y));
+    *sky_angle = (PI / 2) - atan(ray.z / xy);
+    return false;
+  }
+}
+#endif
 

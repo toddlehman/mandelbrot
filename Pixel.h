@@ -30,6 +30,8 @@ typedef struct
 {
   LinearRGB  color;                    // 12 bytes
 
+  float32    displacement_3d;          //  4 bytes
+
   float32    interior_portion;         //  4 bytes
 
   bool       is_defined:1;             //  1 bit
@@ -41,7 +43,7 @@ typedef struct
   uint       padding:26;               // 26 bits
                             // Subtotal:   4 bytes
 }
-Pixel;                         // Total:  20 bytes
+Pixel;                         // Total:  24 bytes
 
 #pragma pack(pop)
 

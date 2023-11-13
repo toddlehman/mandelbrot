@@ -26,7 +26,7 @@ Image *image_create(int width_pixels, int height_pixels,
   // FIXME:  Move these two assertions to initialization code for each of these
   // modules.
   assert(sizeof(MandelbrotResult) == 24);  // To catch unexpected changes.
-  assert(sizeof(Pixel) == 20);  // To catch unexpected changes.
+  assert(sizeof(Pixel) == 24);  // To catch unexpected changes.
 
   assert(width_pixels >= 1);
   assert(height_pixels >= 1);
@@ -153,6 +153,7 @@ Image *image_create(int width_pixels, int height_pixels,
     .color                 = palette_color_from_mandelbrot_result(
                                this->palette,
                                mandelbrot_result_interior_uniterated()),
+    .displacement_3d       = 0.0,
     .interior_portion      = 1.0,
     .is_defined            = true,
     .is_interior_periodic  = false,
@@ -214,6 +215,61 @@ bool image_pixel_needs_supersampling(const Image *this,
            ((ss_depth < this->supersample_exterior_max_depth) &&
             (solidarity < this->supersample_solidarity));
   }
+}
+
+
+//-----------------------------------------------------------------------------
+// COMPUTE PIXEL DISPLACEMENT FOR 3D RENDERING
+
+private_method
+float32 image_compute_displacement_3d(const Image *this,
+                                      const mp_real x,
+                                      const mp_real y,
+                                      const MandelbrotResult mr)
+{
+  // This is a quick test hack KLUDGE for now -- just a proof of concept;
+  // refinement is needed.
+
+  real d = sqrt(pow(mp_get_d(this->camera->camera_x) - mp_get_d(x), 2) +
+                pow(mp_get_d(this->camera->camera_y) - mp_get_d(y), 2));
+
+  real r = this->camera->target_camera_rho;
+
+  // Super KLUDGE:
+  real dfoo = r;
+  real f = 1 / (dfoo + d);
+  f = unlerp(f, 0, 1 / dfoo);
+  f *= sin(this->camera->target_camera_phi);
+  //f = 1;
+
+  real dwell = mr.dwell;
+  if (mr.dwell > this->mandelbrot->conf.iter_max)
+    dwell = this->mandelbrot->conf.iter_max;
+
+#if 1  // Make mountains
+  real remapped_dwell = (dwell > 0)? 1 - (1 / pow(1.5, log2(dwell))) : 0;
+  remapped_dwell = pow(remapped_dwell, 1);
+  float32 displacement = remapped_dwell * f;
+  displacement /= 5;
+#else  // Make valleys
+  real remapped_dwell = (dwell > 0)? 1 - (1 / pow(1.5, log2(dwell))) : 0;
+  remapped_dwell = pow(remapped_dwell, 1);
+  remapped_dwell = 1 - remapped_dwell;
+  float32 displacement = remapped_dwell * f;
+  displacement /= 3;
+#endif
+
+  displacement -= 0;  // Super stupid KLUDGE
+  displacement *= (real)this->di;
+
+  #if 0  // Only for debugging.
+  fprintf(stderr, "(x,y)=(%f,%f) dwell=%9.1f rdwell=%f d=%.16f f=%f disp=%f\n",
+          (double)mp_get_d(x), (double)mp_get_d(y), (double)mr.dwell,
+          (double)remapped_dwell,
+          (double)d, (double)f, (double)displacement);
+  #endif
+
+  return displacement;
 }
 
 
@@ -293,6 +349,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
     // Now compute pixel.
     mr = mandelbrot_compute(this->mandelbrot, x, y, e);
     pixel.color = palette_color_from_mandelbrot_result(this->palette, mr);
+    pixel.displacement_3d = image_compute_displacement_3d(this, x, y, mr);
     pixel.interior_portion = mandelbrot_result_is_interior(mr)? 1.0 : 0.0;
     pixel.is_defined = true;
     pixel.is_interior_periodic = mandelbrot_result_is_interior_periodic(mr);
@@ -334,6 +391,7 @@ Pixel image_compute_pixel(const Image *this, real i, real j)
       );
     }
 
+    pixel.displacement_3d = 0;
     pixel.interior_portion = 0;
     pixel.is_defined = true;
     pixel.is_interior_periodic = false;
@@ -421,6 +479,10 @@ Pixel image_compute_supersampled_pixel(const Image *this,
   Pixel pixel;
   pixel.color = linear_rgb_average4(pixel_00.color, pixel_01.color,
                                     pixel_10.color, pixel_11.color);
+  pixel.displacement_3d = (pixel_00.displacement_3d +
+                           pixel_01.displacement_3d +
+                           pixel_10.displacement_3d +
+                           pixel_11.displacement_3d) / 4;
   pixel.interior_portion = (pixel_00.interior_portion +
                             pixel_01.interior_portion +
                             pixel_10.interior_portion +
@@ -681,6 +743,48 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
 
 
 //-----------------------------------------------------------------------------
+// APPLY 3-D DISPLACEMENT TO PIXELS AFTER POPULATING
+
+private_method
+void image_apply_displacement_3d(Image *this)
+{
+  assert(this);
+  return;  // KLUDGE -- disable this.
+
+  // Proceed top-down through the image, assuming that the uppermost pixels
+  // are the farthest from the camera.  FIXME:  This won't work for tilted
+  // cameras.  Also, skip this step if the image is a perfect top-down view
+  // with no 3D.
+  for (int i = 0; i < this->di; i++)
+  {
+    for (int j = 0; j < this->dj; j++)
+    {
+      Pixel pixel = this->pixels[i][j];
+
+      if (pixel.displacement_3d < 0)
+        continue;
+
+      int d = (int)floor(pixel.displacement_3d);
+      for (int k = 1; (k < d) && (i - k >= 0); k++)
+        this->pixels[i-k][j] = this->pixels[i][j];
+
+      float32 remainder = pixel.displacement_3d - d;
+      if (remainder > 0)
+      {
+        int k = d;
+        if (i - k >= 0)
+        {
+          this->pixels[i-k][j].color = linear_rgb_lerp(
+            remainder, pixel.color, this->pixels[i-k][j].color);
+          // TODO:  Do something with the other fields of the Pixel structure.
+        }
+      }
+    }
+  }
+}
+
+
+//-----------------------------------------------------------------------------
 // POPULATE IMAGE
 
 public_method
@@ -699,7 +803,11 @@ void image_populate(Image *this)
 
   // Return now if supersampling is not requested.
   if (!this->supersample)
+  {
+    // KLUDGE!!!! FIXME:  I don't like having this called twice in this routine.
+    image_apply_displacement_3d(this);
     return;
+  }
 
   // Mark interior pixels for supersampling which have an exterior neighbor
   // pixel in any direction, and vice-versa.  (It suffices simply to look for
@@ -788,6 +896,9 @@ void image_populate(Image *this)
     }
   }
 #endif
+
+  // Apply 3-D displacement to pixels.
+  image_apply_displacement_3d(this);
 }
 
 
