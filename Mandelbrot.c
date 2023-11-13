@@ -359,7 +359,8 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon_old(
 
 private_function
 MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
-                   const real cx, const real cy, const real epsilon,
+                   //const real cx, const real cy, const real epsilon,
+                   real cx, real cy, const real epsilon,
                    const uint64 i_max)
 {
   assert(epsilon > 0);

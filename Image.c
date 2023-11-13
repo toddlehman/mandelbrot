@@ -6,6 +6,8 @@
 #import "Mandelbrot.h"
 #import "RGB.h"
 
+#define TRACE 0
+
 
 //-----------------------------------------------------------------------------
 // ALLOCATE IMAGE
@@ -43,7 +45,9 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
 
   Image *this = mem_alloc_clear(1, sizeof(Image));
 
-  // Calculate floating-point precision required.
+
+  // --- Calculate floating-point precision required.
+
   real bits;
   {
     mp_real log2_xy_min_size;
@@ -74,6 +78,9 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   mp_init2(this->pixel_size, mp_prec);
   mp_init2(this->periodicity_epsilon, mp_prec);
 
+
+  // --- Rectify image dimensions.
+
   if (width_pixels == height_pixels)
   {
     mp_set(this->x_size, xy_min_size, MP_ROUND);
@@ -91,6 +98,9 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
     mp_set(this->x_size, xy_min_size, MP_ROUND);
     mp_div_d(this->y_size, xy_min_size, aspect_ratio, MP_ROUND);
   }
+
+
+  // --- Store image dimensions.
 
   this->di = height_pixels;
   this->dj = width_pixels;
@@ -120,6 +130,8 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   // FIXME:  When doing 3D viewport, this will no longer make sense.
   mp_div_ui(this->pixel_size, this->x_size, this->dj, MP_ROUND);
 
+
+  // --- Create Mandelbrot Set iteration object.
   {
     mp_real periodicity_epsilon;
     mp_init2(periodicity_epsilon, mp_prec);
@@ -130,6 +142,9 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
     mp_clear(periodicity_epsilon);
   }
 
+
+  // --- Store supersampling parameters.
+
   this->supersample_interior_min_depth = supersample_interior_min_depth;
   this->supersample_interior_max_depth = supersample_interior_max_depth;
   this->supersample_exterior_min_depth = supersample_exterior_min_depth;
@@ -138,6 +153,33 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   this->supersample = ((supersample_interior_max_depth > 0) ||
                        (supersample_exterior_max_depth > 0))
                    && (supersample_solidarity > 0);
+
+
+  // --- Tweak image position to account for non-center sampling of pixels.
+  //     A supersampling depth of zero results in a tweak of 1/2 pixel.
+  //     A depth of 1 results in a tweak of 1/4 pixel.  A depth of 2 results
+  //     in a tweak of 1/8 pixel.  In general, a depth of $n$ results in a
+  //     tweak of $1/2^{1+n}$ pixel.  This really works beautifully and results
+  //     in pixel-perfect symmetry around the x-axis -- for both even and odd
+  //     image heights.
+  {
+    mp_real xy_tweak;
+    mp_init2(xy_tweak, mp_prec);
+    mp_div_d(xy_tweak, this->pixel_size, pow(2, 1 + supersample_max_depth),
+             MP_ROUND);
+
+    mp_add(this->x_center, this->x_center, xy_tweak, MP_ROUND);
+    mp_sub(this->y_center, this->y_center, xy_tweak, MP_ROUND);
+    mp_add(this->x_min, this->x_min, xy_tweak, MP_ROUND);
+    mp_sub(this->x_max, this->x_max, xy_tweak, MP_ROUND);
+    mp_add(this->y_min, this->y_min, xy_tweak, MP_ROUND);
+    mp_sub(this->y_max, this->y_max, xy_tweak, MP_ROUND);
+
+    mp_clear(xy_tweak);
+  }
+
+
+  // --- Allocate pixel array.
 
   this->_pixels = mem_alloc_clear(this->_di * this->_dj, sizeof(Pixel));
   this->pixels = mem_alloc_clear(this->_di, sizeof(Pixel **));
@@ -150,13 +192,13 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
     this->pixels[i][j].is_defined = 0;
   }
 
+
+  // --- Allocate palette and intialize related resources.
+
   this->palette = palette_create();
 
   this->interior_filler_pixel = (Pixel)
   {
-    #if 0  // OBSOLETE
-    .color                 = palette_interior_uniterated_color(this->palette),
-    #endif
     .color                 = palette_color_from_mandelbrot_result(
                                this->palette,
                                mandelbrot_result_interior_uniterated()),
@@ -318,9 +360,10 @@ Pixel image_compute_pixel(Image *this, real i, real j)
   mp_clear(x);
 
   // Output progress (for debugging).
-  if (false) //if (this->show_progress)
+  #if TRACE
     fprintf(stderr, "i=%7.2f  j=%7.2f  iter=%9llu\n",
                     (double)i, (double)j, mr.iter);
+  #endif
 
   // Map iterations to color.
   pixel.color = palette_color_from_mandelbrot_result(this->palette, mr);
@@ -336,14 +379,14 @@ Pixel image_compute_pixel(Image *this, real i, real j)
   pixel.probed_top_edge = false;
   pixel.probed_left_edge = false;
 
-  #if 0
+  #if TRACE
   if ((i == floor(i)) && (j == floor(j)))
     fprintf(stderr, "pixel(i=%d, j=%d) -> %llu (%.3f,%.3f,%.3f)\n",
-            (int)i, (int)j, pixel.mr.iter,
+            (int)i, (int)j, mr.iter,
             pixel.color.r, pixel.color.g, pixel.color.b);
   else
     fprintf(stderr, "pixel(i=%f, j=%f) -> %llu (%.3f,%.3f,%.3f)\n",
-            i, j, pixel.mr.iter,
+            (double)i, (double)j, mr.iter,
             pixel.color.r, pixel.color.g, pixel.color.b);
   #endif
 
@@ -410,9 +453,11 @@ Pixel image_compute_supersampled_pixel(Image *this,
                             pixel_01.interior_portion +
                             pixel_10.interior_portion +
                             pixel_11.interior_portion) / 4;
-  //fprintf(stderr, "i=%f j=%f di=%f dj=%f ss_depth=%d -> interior=%f\n",
-  //        (double)i, (double)j, (double)di, (double)dj, ss_depth,
-  //        (double)pixel.interior_portion);
+  #if TRACE
+  fprintf(stderr, "i=%f j=%f di=%f dj=%f ss_depth=%d -> interior=%f\n",
+          (double)i, (double)j, (double)di, (double)dj, ss_depth,
+          (double)pixel.interior_portion);
+  #endif
 
   #if 0
   if (ss_depth > 1)  // KLUDGE test.
@@ -464,7 +509,11 @@ void image_populate_pixel(Image *this, int i, int j,
     assert(pixel->is_defined);
   }
 
-  if (pixel->is_interior_periodic && this->supersample)
+  // BUG!  This misses interior uniterated pixels as in those detected by
+  // the cardiod/disc early-out test.
+  // if (pixel->is_interior_periodic && this->supersample)
+
+  if (pixel_is_interior(*pixel) && this->supersample)
   {
     bool all_interior = true;
 
@@ -474,7 +523,8 @@ void image_populate_pixel(Image *this, int i, int j,
       for (int sj = 1; all_interior && (sj < dsj); sj++)  // (Not sj = 0)
       {
         Pixel subpixel = image_compute_pixel(this, i, j+(real)sj/(real)dsj);
-        all_interior &= subpixel.is_interior_periodic;
+        //all_interior &= subpixel.is_interior_periodic;
+        all_interior &= pixel_is_interior(subpixel);
       }
       pixel->probed_top_edge = true;
     }
@@ -485,7 +535,8 @@ void image_populate_pixel(Image *this, int i, int j,
       for (int si = 1; all_interior && (si < dsi); si++)  // (Not si = 0)
       {
         Pixel subpixel = image_compute_pixel(this, i+(real)si/(real)dsi, j);
-        all_interior &= subpixel.is_interior_periodic;
+        //all_interior &= subpixel.is_interior_periodic;
+        all_interior &= pixel_is_interior(subpixel);
       }
       pixel->probed_left_edge = true;
     }
@@ -494,6 +545,7 @@ void image_populate_pixel(Image *this, int i, int j,
     {
       pixel->supersample = true;  // Mark for future refinement.
       pixel->supersampled = false;
+      pixel->interior_portion = 0.5;  // Signify neither exterior nor interior.
     }
   }
 }
@@ -541,7 +593,9 @@ void image_refine_pixel(Image *this, int i, int j)
 private_method
 void image_populate_block(Image *this, int i0, int j0, int di, int dj)
 {
-  //fprintf(stderr, "block(i0=%d, j0=%d, di=%d, dj=%d)\n", i0, j0, di, dj);
+  #if TRACE
+  fprintf(stderr, "block(i0=%d, j0=%d, di=%d, dj=%d)\n", i0, j0, di, dj);
+  #endif
 
   assert(this);
   assert(i0 >= 0); assert(i0 + di <= this->_di);
@@ -568,20 +622,32 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
   {
     for (int j = j0; fill_block && (j <= j1); j++)  // Proceed left to right.
     {
-      //fprintf(stderr, "i=%d, j=%d\n", i, j);
-
       if ((i > i0) && (i < i1) && (j > j0) && (j < j1))
         { j = j1 - 1; continue; }  // Efficiently skip non-boundary pixels.
+
+      #if TRACE
+      fprintf(stderr, "i=%d, j=%d\n", i, j);
+      #endif
 
       bool probe_top_edge  = ((i == i0) || (i == i1)) && (j != j1);
       bool probe_left_edge = ((j == j0) || (j == j1)) && (i != i1);
 
       image_populate_pixel(this, i, j, probe_top_edge, probe_left_edge);
 
-      fill_block &= this->pixels[i][j].is_interior_periodic;
+      // BUG!  This misses interior uniterated pixels as in those detected by
+      // the cardiod/disc early-out test.
+      //fill_block &= this->pixels[i][j].is_interior_periodic;
+
+      fill_block &= pixel_is_interior(this->pixels[i][j]);
+      #if TRACE
+      if (!fill_block)
+        { fprintf(stderr, "Pixel is not interior; exiting boundary scan\n"); }
+      #endif
     }
   }
-  //fprintf(stderr, "done with boundary\n");
+  #if TRACE
+  fprintf(stderr, "done with boundary\n");
+  #endif
 
 
   // --- Fill interior of block or subdivide.

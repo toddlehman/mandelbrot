@@ -229,6 +229,17 @@ bool process_argument(MainControl *this, const char *str)
   {
     valid = fetch_int_value(value, &this->supersample_exterior_max_depth);
   }
+  else if ((value = argument_matches(key, "ssd=")))
+  {
+    int supersample_max_depth;
+    valid = fetch_int_value(value, &supersample_max_depth);
+    this->supersample_interior_min_depth = supersample_max_depth;
+    this->supersample_interior_max_depth = supersample_max_depth;
+    this->supersample_exterior_min_depth = 0;
+    this->supersample_exterior_max_depth = supersample_max_depth;
+    if ((supersample_max_depth > 0) && (this->supersample_solidarity == 0))
+      this->supersample_solidarity = 0.999;  // Default value.
+  }
   else if ((value = argument_matches(key, "sss=")))
   {
     real supersample_solidarity;
