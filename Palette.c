@@ -41,7 +41,8 @@ Palette *palette_create(void)
 
   this->undefined_color            = (LinearRGB) { 1.0, 1.0, 1.0 };  // White
   this->interior_iterated_color    = (LinearRGB) { 0.0, 0.0, 0.0 };  // Black
-  this->interior_uniterated_color  = (LinearRGB) { 0.01,0.01,0.01};  // Dark gray
+//this->interior_uniterated_color  = (LinearRGB) { 0.01,0.01,0.01};  // Dark gray
+  this->interior_uniterated_color  = (LinearRGB) { 0.0 ,0.0 ,0.0 };  // Black
 
   #if 0
   printf("Color palette:\n");

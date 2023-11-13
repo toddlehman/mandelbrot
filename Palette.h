@@ -52,11 +52,11 @@ LinearRGB palette_interior_uniterated_color(Palette *this)
 // FUNCTION PROTOTYPES
 
 extern_public_constructor
-Palette *palette_create(void);
+  Palette *palette_create(void);
 
 extern_public_destructor
-void palette_destroy(Palette **p_this);
+  void palette_destroy(Palette **p_this);
 
 extern_public_method
-LinearRGB palette_color_from_mandelbrot_result(Palette *this,
-                                               MandelbrotResult mr);
+  LinearRGB palette_color_from_mandelbrot_result(Palette *this,
+                                                 MandelbrotResult mr);

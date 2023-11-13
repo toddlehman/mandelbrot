@@ -19,7 +19,7 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   assert(mp_sgn(xy_min_size) > 0);
   assert(width_pixels >= 1);
   assert(height_pixels >= 1);
-  assert(subsample_limit >= 1);
+  assert(subsample_limit >= 0);
   assert(subsample_tolerance >= 0);
   assert(subsample_tolerance <= 1);
   assert(iter_max > 0);
@@ -183,9 +183,11 @@ bool image_compute_argand_point(Image *this,
 // COMPUTE NON-SUBSAMPLED PIXEL
 
 private_method
-void image_compute_pixel(Image *this, real i, real j, Pixel *pixel)
+Pixel image_compute_pixel(Image *this, real i, real j)
 {
-  assert(this); assert(pixel);
+  assert(this);
+
+  Pixel pixel;
 
   // Map image coordinates to Argand plane coordinates.
   mp_real x, y;
@@ -194,44 +196,25 @@ void image_compute_pixel(Image *this, real i, real j, Pixel *pixel)
   (void)image_compute_argand_point(this, i, j, &x, &y);
 
   // Calculate iterations.
-  pixel->mr = mandelbrot_compute(this->mandelbrot, x, y);
+  pixel.mr = mandelbrot_compute(this->mandelbrot, x, y);
   mp_clear(y);
   mp_clear(x);
 
   // Map iterations to color.
-  pixel->color = palette_color_from_mandelbrot_result(this->palette, pixel->mr);
+  pixel.color = palette_color_from_mandelbrot_result(this->palette, pixel.mr);
 
   #if 0
   if ((i == floor(i)) && (j == floor(j)))
     fprintf(stderr, "pixel(i=%d, j=%d) -> %llu (%.3f,%.3f,%.3f)\n",
-            (int)i, (int)j, pixel->mr.iter,
-            pixel->color.r, pixel->color.g, pixel->color.b);
+            (int)i, (int)j, pixel.mr.iter,
+            pixel.color.r, pixel.color.g, pixel.color.b);
   else
     fprintf(stderr, "pixel(i=%f, j=%f) -> %llu (%.3f,%.3f,%.3f)\n",
-            i, j, pixel->mr.iter,
-            pixel->color.r, pixel->color.g, pixel->color.b);
+            i, j, pixel.mr.iter,
+            pixel.color.r, pixel.color.g, pixel.color.b);
   #endif
-}
 
-
-//-----------------------------------------------------------------------------
-// CALCULATE SUBSAMPLED PIXEL
-
-private_method
-Pixel image_compute_subsampled_pixel(Image *this,
-                                     mp_real *x0, mp_real *y0,
-                                     mp_real *dx, mp_real *dy,
-                                     LinearRGB color00, LinearRGB color01,
-                                     LinearRGB color10, LinearRGB color11,
-                                     int current_subsample_depth)
-{
-  assert(this);
-
-#if 0  // *******TEMPORARY*******
-  assert(x0); assert(y0); assert(dx); assert(dy);
-#endif
-
-  return (Pixel) { };
+  return pixel;
 }
 
 
@@ -247,10 +230,64 @@ void image_populate_pixel(Image *this, int i, int j)
 
   unless (pixel_is_defined(this->pixels[i][j]))
   {
-    image_compute_pixel(this, (real)i, (real)j, &(this->pixels[i][j]));
+    this->pixels[i][j] = image_compute_pixel(this, i, j);
   }
 }
 
+
+
+//-----------------------------------------------------------------------------
+// CALCULATE SUBSAMPLED PIXEL
+
+private_method
+Pixel image_compute_subsampled_pixel(Image *this,
+                                     real i, real j, real di, real dj,
+                                     Pixel pixel_00,
+                                     int current_subsample_depth)
+{
+  assert(this);
+  assert(i >= 0); assert(i + di <= this->di);
+  assert(j >= 0); assert(j + dj <= this->dj);
+
+  // Calculate intermediate subpixel values.
+  Pixel pixel_01 = image_compute_pixel(this, i,        j+(dj/2));
+  Pixel pixel_10 = image_compute_pixel(this, i+(di/2), j);
+  Pixel pixel_11 = image_compute_pixel(this, i+(di/2), j+(dj/2));
+
+  // Assess color variation.
+  float32 diff = linear_rgb_diff4(pixel_00.color, pixel_01.color,
+                                  pixel_10.color, pixel_11.color);
+
+  // If color variation exceeds tolerance, then subdivide each subquadrant of
+  // the pixel recursively (unless the subsample depth limit has already been
+  // reached).
+  if ((diff > this->subsample_tolerance) &&
+      (current_subsample_depth < this->subsample_limit))
+  {
+    pixel_00 = image_compute_subsampled_pixel(this, i, j, di/2, dj/2,
+                                          pixel_00, current_subsample_depth+1);
+
+    pixel_01 = image_compute_subsampled_pixel(this, i, j+dj/2, di/2, dj/2,
+                                          pixel_01, current_subsample_depth+1);
+
+    pixel_10 = image_compute_subsampled_pixel(this, i+di/2, j, di/2, dj/2,
+                                          pixel_10, current_subsample_depth+1);
+
+    pixel_11 = image_compute_subsampled_pixel(this, i+di/2, j+dj/2, di/2, dj/2,
+                                          pixel_11, current_subsample_depth+1);
+  }
+
+  // Now return a blend of the four subsamples.
+
+  Pixel pixel;
+  pixel.color = linear_rgb_average4(pixel_00.color, pixel_01.color,
+                                    pixel_10.color, pixel_11.color);
+  pixel.mr.dwell = -1;
+  pixel.mr.period = -1;
+  pixel.mr.iter = pixel_00.mr.iter + pixel_01.mr.iter +
+                  pixel_10.mr.iter + pixel_11.mr.iter;
+  return pixel;
+}
 
 
 //-----------------------------------------------------------------------------
@@ -263,19 +300,25 @@ void image_repopulate_pixel(Image *this, int i, int j)
   assert(i >= 0); assert(i < this->di);  // *Not* this->_di here.
   assert(j >= 0); assert(j < this->dj);  // *Not* this->_dj here.
 
-  this->pixels[i][j] =
-    image_compute_subsampled_pixel(this, 
-      NULL, NULL, NULL, NULL,
-      this->pixels[i+0][j+0].color,
-      this->pixels[i+0][j+1].color,
-      this->pixels[i+1][j+0].color,
-      this->pixels[i+1][j+1].color,
+  float32 diff = linear_rgb_diff4(
+    this->pixels[i+0][j+0].color,
+    this->pixels[i+0][j+1].color,
+    this->pixels[i+1][j+0].color,
+    this->pixels[i+1][j+1].color
+  );
+
+  if (diff > this->subsample_tolerance)
+  {
+    this->pixels[i][j] = image_compute_subsampled_pixel(
+      this, i, j, 1, 1,
+      this->pixels[i+0][j+0],
       1);
+  }
 }
 
 
 //-----------------------------------------------------------------------------
-// POPULATE BLOCK
+// POPULATE BLOCK (RECURSIVE)
 
 private_method
 void image_populate_block(Image *this, int i0, int j0, int di, int dj)
@@ -410,18 +453,11 @@ void image_populate(Image *this)
   for (int i = 0; i < this->di; i++)
   for (int j = 0; j < this->dj; j++)
   {
-    float32 diff = linear_rgb_diff4(
-      this->pixels[i+0][j+0].color,
-      this->pixels[i+0][j+1].color,
-      this->pixels[i+1][j+0].color,
-      this->pixels[i+1][j+1].color
-    );
+    image_repopulate_pixel(this, i, j);
 
-    // TODO:  Do adaptive pixel subsampling instead of this averaging.
-
+#if 0  // OBSOLETE
     if (diff > this->subsample_tolerance)
     {
-if (0)
       image_repopulate_pixel(this, i, j);
 
       LinearRGB color = linear_rgb_average4(
@@ -434,6 +470,7 @@ if (0)
       this->pixels[i][j].color = linear_rgb_lerp(diff,
         color, palette_undefined_color(this->palette));
     }
+#endif
   }
 }
 

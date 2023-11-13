@@ -88,15 +88,16 @@ int main (int arg_count, char *args[])
     printf("\n");
   }
 
-  if (arg_count - arg_index == 7)
+  if (arg_count - arg_index == 8)
   {
-    char *str_x_center         = args[arg_index+0];
-    char *str_y_center         = args[arg_index+1];
-    char *str_xy_min_size      = args[arg_index+2];
-    char *str_iter_max         = args[arg_index+3];
-    char *str_width_pixels     = args[arg_index+4];
-    char *str_height_pixels    = args[arg_index+5];
-    char *str_subsample_limit  = args[arg_index+6];
+    char *str_x_center             = args[arg_index+0];
+    char *str_y_center             = args[arg_index+1];
+    char *str_xy_min_size          = args[arg_index+2];
+    char *str_iter_max             = args[arg_index+3];
+    char *str_width_pixels         = args[arg_index+4];
+    char *str_height_pixels        = args[arg_index+5];
+    char *str_subsample_limit      = args[arg_index+6];
+    char *str_subsample_tolerance  = args[arg_index+7];
 
     // Calculate minimum precision needed to represent values.
     int mp_prec = 0;
@@ -117,7 +118,7 @@ int main (int arg_count, char *args[])
     int     width_pixels         = atoi(str_width_pixels);
     int     height_pixels        = atoi(str_height_pixels);
     int     subsample_limit      = atoi(str_subsample_limit);
-    real    subsample_tolerance  = 0.5;
+    real    subsample_tolerance  = atof(str_subsample_tolerance);
 
     Image *image = image_create(x_center, y_center, xy_min_size,
                                 width_pixels, height_pixels,
