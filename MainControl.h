@@ -15,15 +15,17 @@ typedef struct
   mp_real  julia_x;
   mp_real  julia_y;
 
-  // FIXME:  These 7 parameters belong in a camera object, or as calls to
+  // FIXME:  These 9 parameters belong in a camera object, or as calls to
   // property setters of a camera object.
   mp_real  target_x;
   mp_real  target_y;
   real     target_camera_rho;
   real     target_camera_theta;
   real     target_camera_phi;
-  real     viewport_tilt;
-  real     viewport_fov;
+  real     camera_theta;
+  real     camera_phi;
+  real     camera_roll;
+  real     camera_fov;
 
   uint64   iter_max;
 

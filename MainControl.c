@@ -199,7 +199,7 @@ bool process_argument(MainControl *this, const char *str)
     mp_clear(this->target_y);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->target_y);
   }
-  else if ((value = argument_matches(key, "cr=")))
+  else if ((value = argument_matches(key, "cd=")))
   {
     valid = fetch_real_value(value, &this->target_camera_rho);
   }
@@ -213,15 +213,25 @@ bool process_argument(MainControl *this, const char *str)
     valid = fetch_real_value(value, &this->target_camera_phi);
     this->target_camera_phi = degrees_to_radians(this->target_camera_phi);
   }
-  else if ((value = argument_matches(key, "tilt=")))
+  else if ((value = argument_matches(key, "vt=")))
   {
-    valid = fetch_real_value(value, &this->viewport_tilt);
-    this->viewport_tilt = degrees_to_radians(this->viewport_tilt);
+    valid = fetch_real_value(value, &this->camera_theta);
+    this->camera_theta = degrees_to_radians(this->camera_theta);
+  }
+  else if ((value = argument_matches(key, "vp=")))
+  {
+    valid = fetch_real_value(value, &this->camera_phi);
+    this->camera_phi = degrees_to_radians(this->camera_phi);
+  }
+  else if ((value = argument_matches(key, "vr=")))
+  {
+    valid = fetch_real_value(value, &this->camera_roll);
+    this->camera_roll = degrees_to_radians(this->camera_roll);
   }
   else if ((value = argument_matches(key, "fov=")))
   {
-    valid = fetch_real_value(value, &this->viewport_fov);
-    this->viewport_fov = degrees_to_radians(this->viewport_fov);
+    valid = fetch_real_value(value, &this->camera_fov);
+    this->camera_fov = degrees_to_radians(this->camera_fov);
   }
   else if ((value = argument_matches(key, "n=")))
   {
@@ -335,8 +345,10 @@ int main (int arg_count, const char *args[])
   this->target_camera_rho   = 2.0;
   this->target_camera_theta = degrees_to_radians(0);
   this->target_camera_phi   = degrees_to_radians(0);
-  this->viewport_tilt       = degrees_to_radians(0);
-  this->viewport_fov        = degrees_to_radians(90);
+  this->camera_theta        = degrees_to_radians(0);
+  this->camera_phi          = degrees_to_radians(0);
+  this->camera_roll         = degrees_to_radians(0);
+  this->camera_fov          = degrees_to_radians(90);
   this->iter_max = 10000;
   this->width_pixels  = 8;
   this->height_pixels = 8;
@@ -396,8 +408,10 @@ int main (int arg_count, const char *args[])
     this->target_camera_rho,
     this->target_camera_theta,
     this->target_camera_phi,
-    this->viewport_tilt,
-    this->viewport_fov);
+    this->camera_theta,
+    this->camera_phi,
+    this->camera_roll,
+    this->camera_fov);
 
   Image *image = image_create(
     this->width_pixels,

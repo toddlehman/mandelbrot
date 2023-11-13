@@ -25,17 +25,21 @@ Camera *camera_create(mp_real target_x,
                       real target_camera_rho,
                       real target_camera_theta,
                       real target_camera_phi,
-                      real viewport_tilt,
-                      real viewport_fov)
+                      real camera_theta,
+                      real camera_phi,
+                      real camera_roll,
+                      real camera_fov)
 {
   #if 0  // OBSOLETE -- Was only for debugging.
-  fprintf(stderr, "target=(%f,%f) rho=%f theta=%f phi=%f tilt=%f fov=%f\n",
+  fprintf(stderr, "target=(%f,%f) cd=%f ct=%f cp=%f vt=%f vp=%f vr=%f fov=%f\n",
           mp_get_d(target_x), mp_get_d(target_y),
           (double)target_camera_rho,
           (double)target_camera_theta,
           (double)target_camera_phi,
-          (double)viewport_tilt,
-          (double)viewport_fov);
+          (double)camera_theta,
+          (double)camera_phi,
+          (double)camera_roll,
+          (double)camera_fov);
   #endif
 
   Camera *this = mem_alloc_clear(1, sizeof(Camera));
@@ -49,9 +53,10 @@ Camera *camera_create(mp_real target_x,
   this->target_camera_rho   = target_camera_rho;
   this->target_camera_theta = target_camera_theta;
   this->target_camera_phi   = target_camera_phi;
-
-  this->viewport_tilt = viewport_tilt;
-  this->viewport_fov  = viewport_fov;
+  this->camera_theta        = camera_theta;
+  this->camera_phi          = camera_phi;
+  this->camera_roll         = camera_roll;
+  this->camera_fov          = camera_fov;
 
   // Compute target-relative coordinates of camera.
   real phi = this->target_camera_phi;
@@ -72,8 +77,6 @@ Camera *camera_create(mp_real target_x,
     Vector3 s = camera_argand_to_sphere(
                   this, mp_get_d(target_x), mp_get_d(target_y));
     s = vector3_scaled(s, 1); // + target_camera_rho);
-    // TODO:  Take theta and phi into account.
-    phi += 0; theta += 0;  // (Temporary) Avoid compiler warnings.
     mp_set_d(this->camera_x, s.x + trx);
     mp_set_d(this->camera_y, s.y + try);
     mp_set_d(this->camera_z, s.z + trz);
@@ -317,10 +320,10 @@ bool camera_get_argand_point(const Camera *this,
   // numbers (e.g., real).  It needs to be upgraded to work with mp_real.
 
 
-  // --- Transform viewport coordinates for camera tilt rotation.
+  // --- Transform viewport coordinates for camera roll rotation.
   {
     Vector3 viewport = { .x = u, .y = v, .z = 0 };
-    viewport = vector3_rotated_z(viewport, this->viewport_tilt);
+    viewport = vector3_rotated_z(viewport, this->camera_roll);
     u = viewport.x;
     v = viewport.y;
   }
@@ -328,7 +331,7 @@ bool camera_get_argand_point(const Camera *this,
 
   // --- Compute viewport radius from distance and field-of-view.
 
-  real viewport_radius = tan(this->viewport_fov / 2) * this->target_camera_rho;
+  real viewport_radius = tan(this->camera_fov / 2) * this->target_camera_rho;
 
 
   // --- Start with camera position.
@@ -355,8 +358,8 @@ bool camera_get_argand_point(const Camera *this,
     .z = -this->target_camera_rho
   };
 
-  ray = vector3_rotated_x(ray, this->target_camera_phi);
-  ray = vector3_rotated_z(ray, this->target_camera_theta);
+  ray = vector3_rotated_x(ray, this->target_camera_phi   + this->camera_phi);
+  ray = vector3_rotated_z(ray, this->target_camera_theta + this->camera_theta);
 
 
   // --- Extend the ray to meet the Argand plane and note the coordinates of
@@ -397,8 +400,8 @@ bool camera_get_argand_point(const Camera *this,
     .z = -this->target_camera_rho
   };
 
-  ray = vector3_rotated_x(ray, this->target_camera_phi);
-  ray = vector3_rotated_z(ray, this->target_camera_theta);
+  ray = vector3_rotated_x(ray, this->target_camera_phi   + this->camera_phi);
+  ray = vector3_rotated_z(ray, this->target_camera_theta + this->camera_theta);
 
   real globe_radius = 1.00;
   real atmosphere_radius = 1.05;

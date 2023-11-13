@@ -94,6 +94,16 @@ public_function
 real mandelbrot_max_scalar_value_during_iteration()
 {
   //return ESCAPE_RADIUS_SQUARED + 2.0;
+
+  // FIXME: KLUDGE:  The value here is appropriate for the calculation
+  // performed by the caller in Image.c, but it is not appropriate/correct
+  // as a return value for this function.  To fix, rename the function to be
+  // less specific.  The reason for using a low value here instead of the
+  // actual value is because of the way floating-point arithmetic works.
+  // Once escape is achieved from the radius-2 circle, the values are
+  // guaranteed to escape to infinity, and any higher bits are unneeded in
+  // precise calculations because there will be plenty already to the right
+  // of the radix point.
   return 6.0;
 }
 

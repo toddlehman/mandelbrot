@@ -31,14 +31,22 @@ LIBS =
 
 ALL_SRC =	$(H_FILES) \
 		$(C_FILES) \
-		mset_image \
 		mset_make_map \
 		mset_make_zoom \
 		mset_make_flyover \
 		mset_queue_runner \
+		mset_queue_start \
+		mset_queue_stop \
+		mset_queue_clean \
 		mset_queue_eta \
 		mset_blend_frames \
                 mset_collate_stats \
+                mset_anim \
+                mset_anim_Math.pm \
+                mset_anim_Vector2D.pm \
+                mset_anim_CubicBezier2D.pm \
+                mset_anim_Frame.pm \
+                mset_anim_Animation.pm \
 		Makefile
 
 SNAPSHOT =	snapshot.tar.gz

@@ -14,21 +14,23 @@ typedef struct
   mp_real  target_x;     // Real component
   mp_real  target_y;     // Imaginary component
 
+  // Absolute camera position (derived from other values here)
+  mp_real  camera_x;     // x-coordinate
+  mp_real  camera_y;     // y-coordinate
+  mp_real  camera_z;     // z-coordinate
+
   // Relative position of camera (relative to target point)
   real     target_camera_rho;    // Distance to camera from target point
   real     target_camera_theta;  // Angle in xy plane
   real     target_camera_phi;    // Angle from positive z-axis
 
-  // Viewport parameters
-  real     viewport_tilt;      // Angle from vertical (neg=cc-wise, pos=c-wise)
-  //real     viewport_scale;     // Reciprocal of magnification
-  real     viewport_fov;       // Center angle of frustum (0 to π/2)
-  //real     viewport_distance;  // Distance from camera
+  // Viewing angle of camera (additive to target-relative angles)
+  real     camera_theta;     // Additional angle in xy plane
+  real     camera_phi;       // Additional angle from positive z-axis
+  real     camera_roll;      // Angle from vertical (neg=cc-wise, pos=c-wise)
 
-  // Absolute camera position (derived from the above)
-  mp_real  camera_x;     // x-coordinate
-  mp_real  camera_y;     // y-coordinate
-  mp_real  camera_z;     // z-coordinate
+  // Viewport parameters
+  real     camera_fov;       // Center angle of frustum (0 to π/2)
 }
 Camera;
 
@@ -46,8 +48,10 @@ extern_public_constructor
                         real target_camera_rho,
                         real target_camera_theta,
                         real target_camera_phi,
-                        real viewport_tilt,
-                        real viewport_fov);
+                        real camera_theta,
+                        real camera_phi,
+                        real camera_roll,
+                        real camera_fov);
 
 extern_public_destructor
   void camera_destroy(Camera **p_this);
@@ -58,8 +62,9 @@ extern_public_method
                                mp_real *x, mp_real *y,
                                real *sky_angle);
 
+#if 0  // OBSOLETE -- Not needed ever?
 extern_public_method
   bool camera_get_viewport_point(const Camera *this,
                                  mp_real x, mp_real y, mp_real z,
                                  real *u, real *v);
-
+#endif
