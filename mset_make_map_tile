@@ -1,0 +1,238 @@
+#!/usr/bin/perl -w
+#==============================================================================
+#
+#  MAKE MANDELBROT SET MAP TILE
+#
+#  TODO:  Explain map levels, resolution, LeafletJS requirements, etc.
+#
+#  TSL, 2015.11.24
+#
+
+use strict;
+
+use POSIX;
+
+
+#------------------------------------------------------------------------------
+# CONFIGURATION
+
+my $ESTIMATE = 0;
+
+
+#------------------------------------------------------------------------------
+# BOUNDARIES OF THE MANDELBROT SET
+#
+# Boundaries of the M-Set:
+#   x_min = -2
+#   x_max = +0.471185334933396...
+#   y_min = -1.122757063632597...
+#   y_max = +1.122757063632597...
+# Source:
+#   http://mrob.com/pub/muency/easternmostpoint.html
+#   http://mrob.com/pub/muency/northernmostpoint.html
+
+my $mset_x_min = -2;
+my $mset_x_max = +0.471185334933396;
+my $mset_y_min = -1.122757063632597;
+my $mset_y_max = +1.122757063632597;
+
+# The Actual center of Mandelbrot Set is approximately (-0.764407332533302, 0).
+# Thus, this is not exactly the center, but looks best for aesthetic and
+# computation purposes:
+my $map_center_x = -0.75;
+my $map_center_y =  0.00;
+
+my $map_size = 2.625;  # IMPORTANT: Must be the sum of fractions 2^-n.
+my $map_x_min = $map_center_x - ($map_size / 2);
+my $map_y_min = $map_center_y - ($map_size / 2);
+
+my $max_map_level = 12;
+
+
+#------------------------------------------------------------------------------
+# CONVERT MAP TILE COORDINATES TO MANDELBROT SET COORDINATES
+
+sub remap_coordinates ($$$)
+{
+  my ($tile_x, $tile_y, $tile_z) = @_;
+  $tile_z >= 0 or die;
+  ($tile_x >= 0) && ($tile_x < 2**$tile_z) or die;
+  ($tile_y >= 0) && ($tile_y < 2**$tile_z) or die;
+
+  my $mset_dx = $map_size / 2**$tile_z;
+  my $mset_dy = $map_size / 2**$tile_z;
+
+  my $mset_x = $map_x_min + (($tile_x + 0.5) * $mset_dx);
+  my $mset_y = $map_y_min + (($tile_y + 0.5) * $mset_dy);
+
+  return ($mset_x, $mset_y, $mset_dx);
+}
+
+
+#------------------------------------------------------------------------------
+# MAKE ONE TILE
+
+sub make_tile ($$$)
+{
+  my ($tile_z, $tile_x, $tile_y) = @_;
+
+  ($tile_z >= 0) && ($tile_z <= $max_map_level) or die "Level $tile_z invalid";
+  ($tile_x >= 0) && ($tile_x < 2**$tile_z) or die "Tile x=$tile_x invalid";
+  ($tile_y >= 0) && ($tile_y < 2**$tile_z) or die "Tile y=$tile_y invalid";
+
+  my ($mset_x, $mset_y, $mset_cd) =
+    remap_coordinates($tile_x, $tile_y, $tile_z);
+
+  return if $mset_y < 0;  # TODO: In future, create mirror of rendered image.
+
+  my $mset_n = 2**40;   # Maximum iteration count
+  my $mset_dij;         # Tile width/height in pixels
+  my $mset_ss;          # Maximum supersampling depth;
+
+  if ($ESTIMATE)
+  {
+   #($mset_dij. $mset_ss) = (256, 0);
+    ($mset_dij, $mset_ss) = (16, 4);
+   #($mset_dij, $mset_ss) = (1, 8);
+  }
+  else
+  {
+   #($mset_dij, $mset_ss) = (256, 4);
+    ($mset_dij, $mset_ss) = (256, 2);
+   #($mset_dij, $mset_ss) = (256, 0);
+  }
+
+  if ($ESTIMATE)
+  {
+    my $cmd = sprintf "mset_image --stats" .
+                      " x=%.16f y=%.16f cd=%.16f n=%d" .
+                      " dij=%d ss=%d sss=.999",
+                      $mset_x, $mset_y, $mset_cd, $mset_n, $mset_dij, $mset_ss;
+    #print "+ $cmd 2>&1 1>/dev/null\n";
+
+    my $stats = `$cmd 2>&1 1>/dev/null`;
+    $? == 0 or die "Rendering failed";
+
+    my ($total_iterations) = ($stats =~ m/Total iterations:\s+(\d+)/);
+    defined($total_iterations) or die "Missing iteration count";
+
+    printf "%-2d %4d %4d   %+19.16f %+19.16f %18.16f %16d\n",
+      $tile_z, $tile_x, $tile_y,
+      $mset_x, $mset_y, $mset_cd,
+      $total_iterations;
+  }
+  else
+  {
+    my $png1_filename  = sprintf("%d/%d/%d.png", $tile_z, $tile_x, $tile_y);
+    my $png2_filename  = sprintf("%d/%d/%d.png", $tile_z, $tile_x,
+                                                  2**$tile_z - 1 - $tile_y);
+    my $stats_filename = "$tile_z/$tile_x/$tile_y.stats";
+
+    if (-e $png1_filename)
+    {
+      print "$png1_filename: already present; skipping\n";
+    }
+    else
+    {
+      mkdir "$tile_z"          if !-d "$tile_z";
+      mkdir "$tile_z/$tile_x"  if !-d "$tile_z/$tile_x";
+
+      my $cmd = sprintf "mset_image --stats";
+      $cmd   .= sprintf " x=%.16f y=%.16f cd=%.16f", $mset_x, $mset_y, $mset_cd;
+      $cmd   .= sprintf " n=%d", $mset_n;
+      $cmd   .= sprintf " dij=%d ss=%d sss=.999", $mset_dij, $mset_ss;
+      $cmd   .= sprintf " 2> $stats_filename";
+      $cmd   .= sprintf " | pnmtopng -force -compression=9";
+      $cmd   .= sprintf " > $png1_filename";
+      print "+ $cmd\n";
+
+      system($cmd) == 0
+        or die "Rendering failed";
+
+      unless ($png1_filename eq $png2_filename)
+      {
+        $cmd  = sprintf "pngtopnm %s", $png1_filename;
+        $cmd .= sprintf " | pamflip -topbottom";
+        $cmd .= sprintf " | pnmtopng -force -compression=9";
+        $cmd .= sprintf " > %s", $png2_filename;
+
+        system($cmd) == 0
+          or die "Mirroring failed";
+      }
+
+      system("xz -9 $stats_filename") == 0
+        or die "Compressing stats failed";
+
+      #print "$png1_filename: created (along with its mirror)\n";
+    }
+  }
+
+  return;
+}
+
+
+#------------------------------------------------------------------------------
+# MAKE ONE COLUMN OF TILES
+
+sub make_column ($$)
+{
+  my ($tile_z, $tile_x) = @_;
+
+  for my $tile_y (0 .. 2**$tile_z - 1)
+    { make_tile($tile_z, $tile_x, $tile_y); }
+
+  return;
+}
+
+
+#------------------------------------------------------------------------------
+# MAKE ONE LEVEL OF TILES
+
+sub make_level ($)
+{
+  my ($tile_z) = @_;
+
+  for my $tile_x (0 .. 2**$tile_z - 1)
+    { make_column($tile_z, $tile_x); }
+
+  return;
+}
+
+
+#------------------------------------------------------------------------------
+# MAKE ALL LEVELS OF TILES
+
+sub make_all_levels ()
+{
+  for my $tile_z (0 .. $max_map_level)
+    { make_level($tile_z); }
+}
+
+
+#------------------------------------------------------------------------------
+# MAIN CONTROL
+
+if (defined($ARGV[0]) && ($ARGV[0] eq "-n"))
+  { $ESTIMATE = 1; shift(@ARGV); }  # KLUDGE: Use GetOpt::Std instead.
+
+(@ARGV >= 0) && (@ARGV <= 3) or die;
+my ($tile_z, $tile_x, $tile_y) = @ARGV;
+
+if (defined($tile_y))
+{
+  make_tile($tile_z, $tile_x, $tile_y);
+}
+elsif (defined($tile_x))
+{
+  make_column($tile_z, $tile_x);
+}
+elsif (defined($tile_z))
+{
+  make_level($tile_z);
+}
+else
+{
+  make_all_levels();
+}
+
+exit 0;

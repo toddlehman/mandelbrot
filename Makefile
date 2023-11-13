@@ -2,7 +2,11 @@
 #  Copyright (c) 2013 by Todd S. Lehman.  All rights reserved.
 #------------------------------------------------------------------------------
 
-USE_MPFR =	1
+# FIXME: IMPORTANT:
+# Something is wrong with parsing of command-line parameters when MPFR is
+# enabled.  For example, y=.1 and y=.1000 result in different y values.
+USE_MPFR =	0
+#               ^ Beware of setting this to 1.
 
 COMPILE =	cc -Wall -std=c11 -O3
 LINK =		cc
@@ -38,14 +42,9 @@ LIBS =
 
 ALL_SRC =	$(H_FILES) \
 		$(C_FILES) \
-		mset_make_map \
+		mset_make_map_tile \
 		mset_make_zoom \
 		mset_make_flyover \
-		mset_queue_runner \
-		mset_queue_start \
-		mset_queue_stop \
-		mset_queue_clean \
-		mset_queue_eta \
 		mset_blend_frames \
                 mset_collate_stats \
                 mset_anim \

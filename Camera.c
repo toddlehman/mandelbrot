@@ -4,9 +4,12 @@
 
 #import "Camera.h"
 
-// FIXME:  Make this configurable by a runtime switch.
+// TODO:  Make this configurable by a runtime switch.
+// TODO:  Factor out into an orthographic vs. perspective switch so that
+//        MAP_WORLD and FLAT_WORLD can be combined.
+#define  MAP_WORLD        1
 #define  FLAT_WORLD       0
-#define  SPHERICAL_WORLD  1
+#define  SPHERICAL_WORLD  0
 
 
 //-----------------------------------------------------------------------------
@@ -69,7 +72,11 @@ Camera *camera_create(mp_real target_x,
   mp_init2(this->camera_x, mp_get_prec(target_x));  // KLUDGE on precision
   mp_init2(this->camera_y, mp_get_prec(target_x));  // KLUDGE on precision
   mp_init2(this->camera_z, mp_get_prec(target_x));  // KLUDGE on precision
-  #if FLAT_WORLD
+  #if MAP_WORLD
+    mp_add_d(this->camera_x, this->target_x, trx);
+    mp_add_d(this->camera_y, this->target_y, try);
+    mp_set_d(this->camera_z,                 trz);
+  #elif FLAT_WORLD
     mp_add_d(this->camera_x, this->target_x, trx);
     mp_add_d(this->camera_y, this->target_y, try);
     mp_set_d(this->camera_z,                 trz);
@@ -353,7 +360,20 @@ bool camera_get_argand_point(const Camera *this,
   // --- Cast a ray from the camera to the viewport, using the camera's
   //     orientation (given by 2 of 3 Euler angles).
 
-#if FLAT_WORLD
+#if MAP_WORLD
+
+  assert(mp_get_d(this->camera_z) > 0);
+  assert(this->target_camera_rho > 0);
+  assert(this->target_camera_theta == 0);
+  assert(this->target_camera_phi == 0);
+  viewport_radius = this->target_camera_rho / 2;
+  mp_set_d(*x, position.x + (u * viewport_radius));
+  mp_set_d(*y, position.y + (v * viewport_radius));
+  unless (atmo_scat == NULL)
+    *atmo_scat = 0;
+  return true;
+
+#elif FLAT_WORLD
 
   Vector3 ray =
   {

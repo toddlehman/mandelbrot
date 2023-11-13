@@ -53,11 +53,14 @@ Palette *palette_create(void)
   this->exterior_colors[i++] = (LinearRGB) { 0.30, 0.00, 0.40 };  // Purple
   this->exterior_locations[i] = 0.20;
   this->exterior_colors[i++] = (LinearRGB) { 0.90, 0.00, 0.00 };  // Red
-  this->exterior_locations[i] = 0.50;
+//this->exterior_locations[i] = 0.50;  // retiring this value
+  this->exterior_locations[i] = 0.30;  // new value -- better?
   this->exterior_colors[i++] = (LinearRGB) { 0.95, 0.80, 0.00 };  // Yellow
-  this->exterior_locations[i] = 0.80;
+//this->exterior_locations[i] = 0.80;  // retiring this value
+  this->exterior_locations[i] = 0.60;  // new value -- better?
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.70, 0.02 };  // Green
-  this->exterior_locations[i] = 0.90;
+//this->exterior_locations[i] = 0.90;  // retiring this value
+  this->exterior_locations[i] = 0.80;  // new value -- better?
   this->exterior_colors[i++] = (LinearRGB) { 0.00, 0.40, 0.60 };  // Teal
 #elif 0
   // Simple, excellent monochrome palette showing lots and lots of detail.
@@ -341,7 +344,7 @@ real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
     f = sqrt(f);
     f = fmod(f, cycle) / cycle;
 
-  #elif 1  // Logarithmic
+  #elif 0  // Logarithmic
 
     // Note to self:  This is what I've been using for spherical/planetary
     // zooms.  Looks quite good for that use.
@@ -352,7 +355,7 @@ real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
     f = pow(f, power);
     f = fmod(f, cycle) / cycle;
 
-  #elif 0  // Square root
+  #elif 1  // Square root
 
     // Note to self:  This might be best for a gigapixel or terapixel map.
     // This is what I used (with a cycle of 100) when I generated the
@@ -360,8 +363,8 @@ real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
 
     //const float64 base = 400, cycle = 240;   // Nice but too tame.
     //const float64 base = 300, cycle = 180;   // Nicer in some cases.
-    const float64 base = 200, cycle = 100;   // Pretty good overall.
-    //const float64 base = 200, cycle = 120;  // Best overall, I think.
+    //const float64 base = 200, cycle = 120;   // Pretty good overall.
+    const float64 base = 200, cycle = 100;   // Even better for map.
 
     //if (f < 0) f = 0;
     //assert(f >= 0);

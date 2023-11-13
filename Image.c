@@ -104,32 +104,6 @@ Image *image_create(int width_pixels, int height_pixels,
                    && (this->supersample_solidarity > 0);
 
 
-
-#if 0  // FIXME -- Do this elsewhere, probably in the population method.
-  // --- Tweak image position to account for non-center sampling of pixels.
-  //     A supersampling depth of zero results in a tweak of 1/2 pixel.
-  //     A depth of 1 results in a tweak of 1/4 pixel.  A depth of 2 results
-  //     in a tweak of 1/8 pixel.  In general, a depth of $n$ results in a
-  //     tweak of $1/2^{1+n}$ pixel.  This really works beautifully and results
-  //     in pixel-perfect symmetry around the x-axis -- for both even and odd
-  //     image heights.
-  {
-    mp_real xy_tweak;
-    mp_init2(xy_tweak, mp_prec);
-    mp_div_d(xy_tweak, this->pixel_size, pow(2, 1 + supersample_max_depth));
-
-    mp_add(this->target_x, this->target_x, xy_tweak);
-    mp_sub(this->target_y, this->target_y, xy_tweak);
-    mp_add(this->x_min, this->x_min, xy_tweak);
-    mp_sub(this->x_max, this->x_max, xy_tweak);
-    mp_add(this->y_min, this->y_min, xy_tweak);
-    mp_sub(this->y_max, this->y_max, xy_tweak);
-
-    mp_clear(xy_tweak);
-  }
-#endif
-
-
   // --- Allocate pixel array.
 
   this->_pixels = mem_alloc_clear(this->_di * this->_dj, sizeof(Pixel));
@@ -285,6 +259,21 @@ Pixel image_compute_pixel(const Image *this, real i, real j,
   Pixel pixel;
   MandelbrotResult mr;
 
+
+  // Tweak input coordinates to account for non-center sampling of pixels.
+  // A supersampling depth of zero results in a tweak of 1/2 pixel.  A depth
+  // of 1 results in a tweak of 1/4 pixel.  A depth of 2 results in a tweak
+  // of 1/8 pixel.  In general, a depth of $n$ results in a tweak of $1/2^{1+n}$
+  // pixel.  This really works beautifully and results in pixel-perfect symmetry
+  // around the x-axis -- for both even and odd image heights.
+  // TODO:  Should this ij_tweak value be cached in the Image structure?
+  {
+    real ij_tweak = 1.0 / pow(2, 1 + this->supersample_max_depth);
+    i += ij_tweak;
+    j += ij_tweak;
+  }
+
+  // Initialize work variables.
   mp_real x, y;
   mp_init2(x, this->mandelbrot->conf.mp_prec);
   mp_init2(y, this->mandelbrot->conf.mp_prec);
@@ -306,6 +295,9 @@ Pixel image_compute_pixel(const Image *this, real i, real j,
   if (camera_get_argand_point(this->camera, u, v, &x, &y, &atmo_scat))
   {
     // Determine subpixel size around point (u,v) in the viewport.
+    // TODO:  Only do this work if we're not making a flat, top-down map
+    // projection.  If making a map projection, just choose e to be
+    // this->camera->camera_z / dij_max / pow(2, this->supersample_max_depth).
     mp_real e, e2, xe, ye;
     mp_init2(e, this->mandelbrot->conf.mp_prec);
     mp_init2(e2, this->mandelbrot->conf.mp_prec);
