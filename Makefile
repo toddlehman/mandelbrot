@@ -13,7 +13,6 @@ MODULES =	Common \
 		Vector3 \
                 MPReal \
 		Memory \
-		DeepReal \
 		Mandelbrot \
 		RGB \
 		Palette \
@@ -86,7 +85,6 @@ Common.o:	Common.h       Common.c
 Vector3.o:	Vector3.h      Vector3.c       Common.o
 Memory.o:	Memory.h       Memory.c        Common.o
 
-DeepReal.o:	DeepReal.h     DeepReal.c      Common.o
 Mandelbrot.o:	Mandelbrot.h   Mandelbrot.c
 
 RGB.o:		RGB.h          RGB.c           Common.o

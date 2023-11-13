@@ -36,6 +36,17 @@ void usage_exit(const char *program_path)
 
 
 //-----------------------------------------------------------------------------
+// CONVERT DEGREES TO RADIANS
+
+private_function
+real degrees_to_radians(const real degrees)
+{
+  real radians = degrees / 360 * TAU;
+  return radians;
+}
+
+
+//-----------------------------------------------------------------------------
 // VALIDATE STRING NUMERIC VALUE
 
 private_function
@@ -168,61 +179,49 @@ bool process_argument(MainControl *this, const char *str)
   const char *value = NULL;
 
   bool valid = false;
-  if ((value = argument_matches(key, "x=")))
+  if ((value = argument_matches(key, "jx=")))
   {
-    mp_clear(this->x_center);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->x_center);
+    mp_clear(this->julia_x);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->julia_x);
+  }
+  else if ((value = argument_matches(key, "jy=")))
+  {
+    mp_clear(this->julia_y);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->julia_y);
+  }
+  else if ((value = argument_matches(key, "x=")))
+  {
+    mp_clear(this->target_x);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->target_x);
   }
   else if ((value = argument_matches(key, "y=")))
   {
-    mp_clear(this->y_center);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->y_center);
+    mp_clear(this->target_y);  // Assumes previously initialized to default.
+    valid = fetch_mp_real_value(value, &this->target_y);
   }
-  else if ((value = argument_matches(key, "r=")))
+  else if ((value = argument_matches(key, "cr=")))
   {
-    mp_clear(this->xy_min_size);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->xy_min_size);
-    mp_mul_d(this->xy_min_size, this->xy_min_size, 2);
+    valid = fetch_real_value(value, &this->target_camera_rho);
   }
-  else if ((value = argument_matches(key, "d=")))
+  else if ((value = argument_matches(key, "ct=")))
   {
-    mp_clear(this->xy_min_size);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->xy_min_size);
+    valid = fetch_real_value(value, &this->target_camera_theta);
+    this->target_camera_theta = degrees_to_radians(this->target_camera_theta);
   }
-  else if ((value = argument_matches(key, "cx=")))
+  else if ((value = argument_matches(key, "cp=")))
   {
-    mp_clear(this->camera_x);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->camera_x);
+    valid = fetch_real_value(value, &this->target_camera_phi);
+    this->target_camera_phi = degrees_to_radians(this->target_camera_phi);
   }
-  else if ((value = argument_matches(key, "cy=")))
+  else if ((value = argument_matches(key, "tilt=")))
   {
-    mp_clear(this->camera_y);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->camera_y);
+    valid = fetch_real_value(value, &this->viewport_tilt);
+    this->viewport_tilt = degrees_to_radians(this->viewport_tilt);
   }
-  else if ((value = argument_matches(key, "cz=")))
+  else if ((value = argument_matches(key, "fov=")))
   {
-    mp_clear(this->camera_z);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->camera_z);
-  }
-  else if ((value = argument_matches(key, "cd=")))
-  {
-    mp_clear(this->camera_d);  // Assumes previously initialized to default.
-    valid = fetch_mp_real_value(value, &this->camera_d);
-  }
-  else if ((value = argument_matches(key, "cox=")))
-  {
-    valid = fetch_real_value(value, &this->camera_ox);
-    this->camera_ox *= TAU / 360.0;  // Convert degrees to radians.
-  }
-  else if ((value = argument_matches(key, "coy=")))
-  {
-    valid = fetch_real_value(value, &this->camera_oy);
-    this->camera_oy *= TAU / 360.0;  // Convert degrees to radians.
-  }
-  else if ((value = argument_matches(key, "coz=")))
-  {
-    valid = fetch_real_value(value, &this->camera_oz);
-    this->camera_oz *= TAU / 360.0;  // Convert degrees to radians.
+    valid = fetch_real_value(value, &this->viewport_fov);
+    this->viewport_fov = degrees_to_radians(this->viewport_fov);
   }
   else if ((value = argument_matches(key, "n=")))
   {
@@ -322,26 +321,24 @@ int main (int arg_count, const char *args[])
 {
   MainControl _this, *this = &_this;
 
-  // Set program defaults.
-  mp_init2(this->camera_x,    32);
-  mp_init2(this->camera_y,    32);
-  mp_init2(this->camera_z,    32);
-  mp_init2(this->camera_d,    32);
-  mp_init2(this->x_center,    32);
-  mp_init2(this->y_center,    32);
-  mp_init2(this->xy_min_size, 32);
-  mp_set_d(this->camera_x,   -0.75);
-  mp_set_d(this->camera_y,    0.00);
-  mp_set_d(this->camera_z,    2.75);
-  mp_set_d(this->camera_d,    0.50);
-  mp_set_d(this->x_center,   -0.75);
-  mp_set_d(this->y_center,    0.00);
-  mp_set_d(this->xy_min_size, 2.75);
-  this->camera_ox = 0.0;
-  this->camera_oy = 0.0;
-  this->camera_oz = 0.0;
+
+  // --- Set program defaults.
+
+  mp_init2(this->julia_x,  32);
+  mp_init2(this->julia_y,  32);
+  mp_init2(this->target_x, 32);
+  mp_init2(this->target_y, 32);
+  mp_set_d(this->julia_x,     0.00);
+  mp_set_d(this->julia_y,     0.00);
+  mp_set_d(this->target_x,   -0.75);
+  mp_set_d(this->target_y,    0.00);
+  this->target_camera_rho   = 2.0;
+  this->target_camera_theta = degrees_to_radians(0);
+  this->target_camera_phi   = degrees_to_radians(0);
+  this->viewport_tilt       = degrees_to_radians(0);
+  this->viewport_fov        = degrees_to_radians(90);
   this->iter_max = 10000;
-  this->width_pixels = 8;
+  this->width_pixels  = 8;
   this->height_pixels = 8;
   this->supersample_interior_min_depth = 0;
   this->supersample_interior_max_depth = 0;
@@ -350,6 +347,9 @@ int main (int arg_count, const char *args[])
   this->supersample_solidarity = 0;
   this->output_statistics = false;
   this->output_image_text_format = isatty(fileno(stdout));
+
+
+  // --- Parse command line arguments.
 
   bool valid = true;
   for (int arg_index = 1; arg_index < arg_count; arg_index++)
@@ -373,6 +373,9 @@ int main (int arg_count, const char *args[])
     error_exit("Supersampling exterior minimum depth must be "
                "less than or equal to maximum depth.");
 
+
+  // --- Dump initial statistics text.
+
   if (this->output_statistics)
   {
     fprintf(stderr, "Command line:\n");
@@ -382,14 +385,21 @@ int main (int arg_count, const char *args[])
     fflush(stderr);
   }
 
+
+  // --- Create image.
+
+  Palette *palette = palette_create();
+
+  Camera *camera = camera_create(
+    this->target_x,
+    this->target_y,
+    this->target_camera_rho,
+    this->target_camera_theta,
+    this->target_camera_phi,
+    this->viewport_tilt,
+    this->viewport_fov);
+
   Image *image = image_create(
-    this->camera_x,
-    this->camera_y,
-    this->camera_z,
-    this->camera_d,
-    this->camera_ox,
-    this->camera_oy,
-    this->camera_oz,
     this->width_pixels,
     this->height_pixels,
     this->supersample_interior_min_depth,
@@ -397,24 +407,33 @@ int main (int arg_count, const char *args[])
     this->supersample_exterior_min_depth,
     this->supersample_exterior_max_depth,
     this->supersample_solidarity,
-    this->iter_max);
+    this->iter_max,
+    palette,
+    camera);
 
   image_populate(image);
+
+
+  // --- Output statistics and output image.
 
   if (this->output_statistics)
     image_output_statistics(image, stderr);
 
   image_output(image, stdout, this->output_image_text_format);
 
+
+  // --- Clean up.
+
   image_destroy(&image);
 
-  mp_clear(this->camera_x);
-  mp_clear(this->camera_y);
-  mp_clear(this->camera_z);
-  mp_clear(this->camera_d);
-  mp_clear(this->x_center);
-  mp_clear(this->y_center);
-  mp_clear(this->xy_min_size);
+  camera_destroy(&camera);
+
+  palette_destroy(&palette);
+
+  mp_clear(this->julia_x);
+  mp_clear(this->julia_y);
+  mp_clear(this->target_x);
+  mp_clear(this->target_y);
 
   return 0;
 }

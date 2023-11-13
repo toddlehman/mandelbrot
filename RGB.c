@@ -9,7 +9,7 @@
 // COMPUTE MAXIMAL DIFFERENCE OF 2 RGB VALUES
 
 public_function
-float32 linear_rgb_maxdiff2(LinearRGB color1, LinearRGB color2)
+float32 linear_rgb_maxdiff2(const LinearRGB color1, const LinearRGB color2)
 {
   #define SET_MAX3(x, a,b,c)  x = MAX(a,b), x = MAX(x,c);
 
@@ -37,8 +37,8 @@ float32 linear_rgb_maxdiff2(LinearRGB color1, LinearRGB color2)
 // COMPUTE MAXIMAL DIFFERENCE OF 4 RGB VALUES
 
 public_function
-float32 linear_rgb_maxdiff4(LinearRGB color1, LinearRGB color2,
-                            LinearRGB color3, LinearRGB color4)
+float32 linear_rgb_maxdiff4(const LinearRGB color1, const LinearRGB color2,
+                            const LinearRGB color3, const LinearRGB color4)
 {
   #define SET_MIN4(x, a,b,c,d)  x = MIN(a,b), x = MIN(x,c), x = MIN(x,d)
   #define SET_MAX4(x, a,b,c,d)  x = MAX(a,b), x = MAX(x,c), x = MAX(x,d)
@@ -69,7 +69,8 @@ float32 linear_rgb_maxdiff4(LinearRGB color1, LinearRGB color2,
 
 //-----------------------------------------------------------------------------
 private_inline_function
-float64 linear_rgb_distance_squared(LinearRGB color1, LinearRGB color2)
+float64 linear_rgb_distance_squared(const LinearRGB color1,
+                                    const LinearRGB color2)
 {
   return ((color1.r - color2.r) * (color1.r - color2.r)) +
          ((color1.g - color2.g) * (color1.g - color2.g)) +
@@ -81,7 +82,7 @@ float64 linear_rgb_distance_squared(LinearRGB color1, LinearRGB color2)
 // COMPUTE SOLIDARITY OF 2 RGB VALUES
 
 public_function
-float32 linear_rgb_solidarity2(LinearRGB color1, LinearRGB color2)
+float32 linear_rgb_solidarity2(const LinearRGB color1, const LinearRGB color2)
 {
   LinearRGB average_color = linear_rgb_average2(color1, color2);
 
@@ -101,8 +102,8 @@ float32 linear_rgb_solidarity2(LinearRGB color1, LinearRGB color2)
 // COMPUTE SOLIDARITY OF 4 RGB VALUES
 
 public_function
-float32 linear_rgb_solidarity4(LinearRGB color1, LinearRGB color2,
-                               LinearRGB color3, LinearRGB color4)
+float32 linear_rgb_solidarity4(const LinearRGB color1, const LinearRGB color2,
+                               const LinearRGB color3, const LinearRGB color4)
 {
   LinearRGB average_color = linear_rgb_average4(color1, color2, color3, color4);
 

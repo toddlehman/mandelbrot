@@ -9,26 +9,60 @@
 // CREATE CAMERA OBJECT
 
 public_constructor
-Camera *camera_create(mp_real x, mp_real y, mp_real z, mp_real d,
-                      real ox, real oy, real oz)
+Camera *camera_create(mp_real target_x,
+                      mp_real target_y,
+                      real target_camera_rho,
+                      real target_camera_theta,
+                      real target_camera_phi,
+                      real viewport_tilt,
+                      real viewport_fov)
 {
+  #if 0  // OBSOLETE -- Was only for debugging.
+  fprintf(stderr, "target=(%f,%f) rho=%f theta=%f phi=%f tilt=%f fov=%f\n",
+          mp_get_d(target_x), mp_get_d(target_y),
+          (double)target_camera_rho,
+          (double)target_camera_theta,
+          (double)target_camera_phi,
+          (double)viewport_tilt,
+          (double)viewport_fov);
+  #endif
+
   Camera *this = mem_alloc_clear(1, sizeof(Camera));
 
-  mp_init2(this->camera_x, mp_get_prec(x));
-  mp_set(this->camera_x, x);
+  // Store non-derived values.
+  mp_init2(this->target_x, mp_get_prec(target_x));
+  mp_init2(this->target_y, mp_get_prec(target_y));
+  mp_set(this->target_x, target_x);
+  mp_set(this->target_y, target_y);
 
-  mp_init2(this->camera_y, mp_get_prec(y));
-  mp_set(this->camera_y, y);
+  this->target_camera_rho   = target_camera_rho;
+  this->target_camera_theta = target_camera_theta;
+  this->target_camera_phi   = target_camera_phi;
 
-  mp_init2(this->camera_z, mp_get_prec(z));
-  mp_set(this->camera_z, z);
+  this->viewport_tilt = viewport_tilt;
+  this->viewport_fov  = viewport_fov;
 
-  mp_init2(this->camera_d, mp_get_prec(d));
-  mp_set(this->camera_d, d);
+  // Compute target-relative coordinates of camera.
+  real phi = this->target_camera_phi;
+  real theta = this->target_camera_theta + (TAU * 3 / 4);
+  real trx = target_camera_rho * sin(phi) * cos(theta);
+  real try = target_camera_rho * sin(phi) * sin(theta);
+  real trz = target_camera_rho * cos(phi);
 
-  this->camera_ox = ox;
-  this->camera_oy = oy;
-  this->camera_oz = oz;
+  // Compute absolute position of camera.
+  mp_init2(this->camera_x, mp_get_prec(target_x));  // KLUDGE on precision
+  mp_init2(this->camera_y, mp_get_prec(target_x));  // KLUDGE on precision
+  mp_init2(this->camera_z, mp_get_prec(target_x));  // KLUDGE on precision
+  mp_add_d(this->camera_x, this->target_x, trx);
+  mp_add_d(this->camera_y, this->target_y, try);
+  mp_set_d(this->camera_z,                 trz);
+
+  #if 0  // OBSOLETE -- Was only for debugging.
+  fprintf(stderr, "camera=(%f,%f,%f)\n",
+          mp_get_d(this->camera_x),
+          mp_get_d(this->camera_y),
+          mp_get_d(this->camera_z));
+  #endif
 
   return this;
 }
@@ -42,13 +76,15 @@ void camera_destroy(Camera **p_this)
 {
   assert(p_this);
   Camera *this = *p_this;
+  assert(this);
+
+  mp_clear(this->target_x);
+  mp_clear(this->target_y);
 
   mp_clear(this->camera_x);
   mp_clear(this->camera_y);
   mp_clear(this->camera_z);
-  mp_clear(this->camera_d);
 
-  assert(this);
   mem_dealloc(p_this);
 }
 
@@ -64,7 +100,7 @@ void camera_destroy(Camera **p_this)
 //         Otherwise, *x and *y are set to zero.
 //
 public_method
-bool camera_get_argand_point(Camera *this,
+bool camera_get_argand_point(const Camera *this,
                              real u, real v,
                              mp_real *x, mp_real *y)
 {
@@ -74,9 +110,23 @@ bool camera_get_argand_point(Camera *this,
   // numbers (e.g., real).  It needs to be upgraded to work with mp_real.
 
 
+  // --- Transform viewport coordinates.
+  {
+    Vector3 viewport = { .x = u, .y = v, .z = 0 };
+    viewport = vector3_rotated_z(viewport, this->viewport_tilt);
+    u = viewport.x;
+    v = viewport.y;
+  }
+
+
+  // --- Compute viewport radius from distance and field-of-view.
+
+  real viewport_radius = tan(this->viewport_fov / 2) * this->target_camera_rho;
+
+
   // --- Start with camera position.
 
-  Vector3 position = (Vector3)
+  Vector3 position =
   {
     .x = mp_get_d(this->camera_x),
     .y = mp_get_d(this->camera_y),
@@ -85,18 +135,17 @@ bool camera_get_argand_point(Camera *this,
 
 
   // --- Cast a ray from the camera to the viewport, using the camera's
-  //     orientation (3 Euler angles).
+  //     orientation (given by 2 of 3 Euler angles).
 
-  Vector3 ray = (Vector3)
+  Vector3 ray =
   {
-    .x = u,
-    .y = v,
-    .z = -mp_get_d(this->camera_d)
+    .x = u * viewport_radius,
+    .y = v * viewport_radius,
+    .z = -this->target_camera_rho
   };
 
-  ray = vector3_rotated_z(ray, this->camera_oz);
-  ray = vector3_rotated_x(ray, this->camera_ox);
-  ray = vector3_rotated_y(ray, this->camera_oy);
+  ray = vector3_rotated_x(ray, this->target_camera_phi);
+  ray = vector3_rotated_z(ray, this->target_camera_theta);
 
 
   // --- Extend the ray to meet the Argand plane and note the coordinates of
@@ -107,12 +156,17 @@ bool camera_get_argand_point(Camera *this,
     real t = unlerp(0, position.z, position.z + ray.z);
     mp_set_d(*x, lerp(t, position.x, position.x + ray.x));
     mp_set_d(*y, lerp(t, position.y, position.y + ray.y));
+    //fprintf(stderr, "(u,v)=(%f,%f) (x,y)=(%f,%f)\n",
+    //        (double)u, (double)v,
+    //        mp_get_d(*x), mp_get_d(*y));
     return true;
   }
   else
   {
     mp_set_d(*x, 0);
     mp_set_d(*y, 0);
+    //fprintf(stderr, "(u,v)=(%f,%f) (x,y)=(undef,undef)\n",
+    //        (double)u, (double)v);
     return false;
   }
 }

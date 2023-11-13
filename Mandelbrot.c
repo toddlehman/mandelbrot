@@ -103,13 +103,10 @@ real mandelbrot_max_scalar_value_during_iteration()
 
 public_constructor
 Mandelbrot *mandelbrot_create(uint64 iter_max,
-                              int mp_prec,
-                              mp_real periodicity_epsilon)
+                              int mp_prec)
 {
   assert(iter_max > 0);
   assert(mp_prec >= 16);
-  assert(mp_prec >= mp_get_prec(periodicity_epsilon));
-  assert(mp_sgn(periodicity_epsilon) >= 0);
 
   Mandelbrot *this = mem_alloc(1, sizeof(*this));
 
@@ -117,11 +114,7 @@ Mandelbrot *mandelbrot_create(uint64 iter_max,
   // Initialize configuration.
 
   this->conf.iter_max = iter_max;
-
   this->conf.mp_prec = mp_prec;
-
-  mp_init2(this->conf.periodicity_epsilon, mp_prec);
-  mp_set(this->conf.periodicity_epsilon, periodicity_epsilon);
 
 
   // Initialize (zero out) statistics.
@@ -164,8 +157,6 @@ void mandelbrot_destroy(Mandelbrot **p_this)
 
   assert(this);
 
-  mp_clear(this->conf.periodicity_epsilon);
-  
   mem_dealloc(p_this);
 }
 
@@ -359,8 +350,7 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon_old(
 
 private_function
 MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
-                   //const real cx, const real cy, const real epsilon,
-                   real cx, real cy, const real epsilon,
+                   const real cx, const real cy, const real epsilon,
                    const uint64 i_max)
 {
   assert(epsilon > 0);
@@ -371,8 +361,8 @@ MandelbrotResult mandelbrot_compute_low_precision_periodicity_epsilon(
   // for this distinction is purely aesthetic.  Square is faster and should
   // always be used when the results of the check are invisible.  Round looks
   // better for large, sloppy epsilons used in low-quality quick renders.
-  // The reason I'm not doing making a distiction here yet between square and
-  // round is because it will require having two separate and nearly identical
+  // The reason I'm not making a distiction here yet between square and round
+  // is because it will require having two separate and nearly identical
   // iteration loops in order to maintain the efficiency of a single method.
   // So this is something for the future.
   #define EPSILON_SQUARE
@@ -641,8 +631,6 @@ MandelbrotResult mandelbrot_compute_low_precision(
                    const real periodicity_epsilon,
                    const uint64 iter_max)
 {
-  #if 1
-
   // Early-out test for membership in main cardioid.
   if (cx >= -0.75)
   {
@@ -676,10 +664,6 @@ MandelbrotResult mandelbrot_compute_low_precision(
     if (cy == 0)  // Note: It is already known that cx < -1.25.
       return mandelbrot_result_interior_uniterated();
   }
-
-  #else
-    #pragma message("Early-out tests temporarily disabled.")
-  #endif
 
   // Handle other cases with either periodicity checking or standard counting.
   if (periodicity_epsilon > 0)
@@ -831,8 +815,14 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
 
 //-----------------------------------------------------------------------------
 public_method
-MandelbrotResult mandelbrot_compute(Mandelbrot *this, mp_real cx, mp_real cy)
+MandelbrotResult mandelbrot_compute(Mandelbrot *this,
+                                    const mp_real cx, const mp_real cy,
+                                    const mp_real periodicity_epsilon)
 {
+  assert(this);
+  assert(this->conf.mp_prec >= mp_get_prec(periodicity_epsilon));
+  assert(mp_sgn(periodicity_epsilon) >= 0);
+
   MandelbrotResult mr;
 
 
@@ -843,14 +833,14 @@ MandelbrotResult mandelbrot_compute(Mandelbrot *this, mp_real cx, mp_real cy)
     mr = mandelbrot_compute_low_precision(
            mp_get_d(cx),
            mp_get_d(cy),
-           mp_get_d(this->conf.periodicity_epsilon),
+           mp_get_d(periodicity_epsilon),
            this->conf.iter_max);
   }
   else
   {
     mr = mandelbrot_compute_high_precision(
            cx, cy,
-           this->conf.periodicity_epsilon,
+           periodicity_epsilon,
            this->conf.iter_max);
   }
 

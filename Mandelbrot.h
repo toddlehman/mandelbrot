@@ -33,7 +33,6 @@ typedef struct
 {
   uint64   iter_max;
   int      mp_prec;
-  mp_real  periodicity_epsilon;
 }
 MandelbrotConfiguration;
 
@@ -46,9 +45,6 @@ MandelbrotConfiguration;
 
 typedef struct
 {
-  //real    interior_area_relative;  // Belongs in Image structure.
-  //mp_real interior_area_absolute;  // Belongs in Image structure.
-
   // For tracking both interior and exterior points.
   uint64  total_iter;
   uint64  total_probes;
@@ -229,12 +225,13 @@ extern_public_function
 
 extern_public_constructor
   Mandelbrot *mandelbrot_create(uint64 iter_max,
-                                int mp_prec,
-                                mp_real periodicity_epsilon);
+                                int mp_prec);
 
 extern_public_destructor
   void mandelbrot_destroy(Mandelbrot **this);
 
 extern_public_method
-  MandelbrotResult mandelbrot_compute(Mandelbrot *this, mp_real cx, mp_real cy);
+  MandelbrotResult mandelbrot_compute(Mandelbrot *this,
+                                      const mp_real cx, const mp_real cy,
+                                      const mp_real periodicity_epsilon);
 

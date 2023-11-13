@@ -32,21 +32,21 @@ Palette;
 #if 0  // OBSOLETE
 //-----------------------------------------------------------------------------
 public_inline_method
-LinearRGB palette_undefined_color(Palette *this)
+LinearRGB palette_undefined_color(const Palette *this)
 {
   return this->undefined_color;
 }
 
 //-----------------------------------------------------------------------------
 public_inline_method
-LinearRGB palette_interior_iterated_color(Palette *this)
+LinearRGB palette_interior_iterated_color(const Palette *this)
 {
   return this->interior_iterated_color;
 }
 
 //-----------------------------------------------------------------------------
 public_inline_method
-LinearRGB palette_interior_uniterated_color(Palette *this)
+LinearRGB palette_interior_uniterated_color(const Palette *this)
 {
   return this->interior_uniterated_color;
 }
@@ -54,7 +54,7 @@ LinearRGB palette_interior_uniterated_color(Palette *this)
 
 //-----------------------------------------------------------------------------
 public_inline_method
-LinearRGB palette_dead_space_color(Palette *this)
+LinearRGB palette_dead_space_color(const Palette *this)
 {
   return this->dead_space_color;
 }
@@ -70,5 +70,5 @@ extern_public_destructor
   void palette_destroy(Palette **p_this);
 
 extern_public_method
-  LinearRGB palette_color_from_mandelbrot_result(Palette *this,
-                                                 MandelbrotResult mr);
+  LinearRGB palette_color_from_mandelbrot_result(const Palette *this,
+                                                 const MandelbrotResult mr);

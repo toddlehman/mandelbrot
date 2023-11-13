@@ -91,7 +91,7 @@ LinearRGB linear_rgb_swerp(const float32 t,
 // COMPUTE AVERAGE OF 2 RGB VALUES
 
 public_inline_function
-LinearRGB linear_rgb_average2(LinearRGB color1, LinearRGB color2)
+LinearRGB linear_rgb_average2(const LinearRGB color1, const LinearRGB color2)
 {
   return (LinearRGB)
   {
@@ -106,8 +106,8 @@ LinearRGB linear_rgb_average2(LinearRGB color1, LinearRGB color2)
 // COMPUTE AVERAGE OF 4 RGB VALUES
 
 public_inline_function
-LinearRGB linear_rgb_average4(LinearRGB color1, LinearRGB color2,
-                              LinearRGB color3, LinearRGB color4)
+LinearRGB linear_rgb_average4(const LinearRGB color1, const LinearRGB color2,
+                              const LinearRGB color3, const LinearRGB color4)
 {
   return (LinearRGB)
   {
@@ -150,16 +150,22 @@ DeviceRGB48 linear_rgb_to_device_rgb48(const LinearRGB color)
 // FUNCTION PROTOTYPES
 
 extern_public_function
-  LinearRGB linear_rgb_average2(LinearRGB color1, LinearRGB color2);
+  LinearRGB linear_rgb_average2(const LinearRGB color1,
+                                const LinearRGB color2);
 
 extern_public_function
-  LinearRGB linear_rgb_average4(LinearRGB color1, LinearRGB color2,
-                                LinearRGB color3, LinearRGB color4);
+  LinearRGB linear_rgb_average4(const LinearRGB color1,
+                                const LinearRGB color2,
+                                const LinearRGB color3,
+                                const LinearRGB color4);
 
 extern_public_function
-  float32 linear_rgb_solidarity2(LinearRGB color1, LinearRGB color2);
+  float32 linear_rgb_solidarity2(const LinearRGB color1,
+                                 const LinearRGB color2);
 
 extern_public_function
-  float32 linear_rgb_solidarity4(LinearRGB color1, LinearRGB color2,
-                                 LinearRGB color3, LinearRGB color4);
+  float32 linear_rgb_solidarity4(const LinearRGB color1,
+                                 const LinearRGB color2,
+                                 const LinearRGB color3,
+                                 const LinearRGB color4);
 

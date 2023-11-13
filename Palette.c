@@ -217,7 +217,7 @@ void palette_destroy(Palette **p_this)
 // COMPUTE COLOR
 
 private_method
-LinearRGB palette_compute_color(Palette *this, real location)
+LinearRGB palette_compute_color(const Palette *this, real location)
 {
   assert(this);
   //assert((location >= 0) && (location <= 1));
@@ -260,7 +260,7 @@ LinearRGB palette_compute_color(Palette *this, real location)
 // MAP MANDELBROT DWELL TO COLOR LOCATION
 
 private_method
-real palette_map_dwell_to_color_location(Palette *this, float64 dwell)
+real palette_map_dwell_to_color_location(const Palette *this, float64 dwell)
 {
   float64 f = dwell;
 
@@ -333,8 +333,8 @@ real palette_map_dwell_to_color_location(Palette *this, float64 dwell)
 // COMPUTE COLOR FROM MANDELBROT RESULT
 
 public_method
-LinearRGB palette_color_from_mandelbrot_result(Palette *this,
-                                               MandelbrotResult mr)
+LinearRGB palette_color_from_mandelbrot_result(const Palette *this,
+                                               const MandelbrotResult mr)
 {
   assert(this);
 

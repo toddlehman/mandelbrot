@@ -13,29 +13,21 @@
 // ALLOCATE IMAGE
 
 public_constructor
-Image *image_create(mp_real camera_x,
-                    mp_real camera_y,
-                    mp_real camera_z,
-                    mp_real camera_d,
-                    real camera_ox,
-                    real camera_oy,
-                    real camera_oz,
-                    int width_pixels, int height_pixels,
+Image *image_create(int width_pixels, int height_pixels,
                     int supersample_interior_min_depth,
                     int supersample_interior_max_depth,
                     int supersample_exterior_min_depth,
                     int supersample_exterior_max_depth,
                     float32 supersample_solidarity,
-                    uint64 iter_max)
+                    uint64 iter_max,
+                    const Palette *palette,
+                    const Camera *camera)
 {
   // FIXME:  Move these two assertions to initialization code for each of these
   // modules.
   assert(sizeof(MandelbrotResult) == 24);  // To catch unexpected changes.
   assert(sizeof(Pixel) == 20);  // To catch unexpected changes.
 
-#if 0  // OBSOLETE
-  assert(mp_sgn(xy_min_size) > 0);
-#endif
   assert(width_pixels >= 1);
   assert(height_pixels >= 1);
   assert(supersample_interior_min_depth >= 0);
@@ -47,13 +39,14 @@ Image *image_create(mp_real camera_x,
   assert(supersample_solidarity >= 0);
   assert(supersample_solidarity <= 1);
   assert(iter_max > 0);
+  assert(palette != NULL);
+  assert(camera != NULL);
 
-#if 0  // FIXME!!!!
-  int supersample_max_depth = MAX(supersample_interior_max_depth,
-                                  supersample_exterior_max_depth);
-#endif
 
   Image *this = mem_alloc_clear(1, sizeof(Image));
+
+  this->camera = camera;
+  this->palette = palette;
 
 
   // --- Calculate floating-point precision required.
@@ -85,48 +78,6 @@ Image *image_create(mp_real camera_x,
   int mp_prec = 68;
 
 
-  // --- Set up camera.
-
-  this->camera = camera_create(camera_x, camera_y, camera_z, camera_d,
-                               camera_ox, camera_oy, camera_oz);
-
-  
-  mp_init2(this->x_center, mp_prec);
-  mp_init2(this->y_center, mp_prec);
-
-  (void)camera_get_argand_point(this->camera,
-                                0, 0, &this->x_center, &this->y_center);
-
-#if 0  // OBSOLETE
-  mp_init2(this->x_size,   mp_prec); mp_init2(this->y_size,   mp_prec);
-  mp_init2(this->x_min,    mp_prec); mp_init2(this->y_min,    mp_prec);
-  mp_init2(this->x_max,    mp_prec); mp_init2(this->y_max,    mp_prec);
-  mp_init2(this->pixel_size, mp_prec);
-  mp_init2(this->periodicity_epsilon, mp_prec);
-
-
-  // --- Rectify image dimensions.
-
-  if (width_pixels == height_pixels)
-  {
-    mp_set(this->x_size, xy_min_size);
-    mp_set(this->y_size, xy_min_size);
-  }
-  else if (width_pixels > height_pixels)
-  {
-    real aspect_ratio = (real)width_pixels / (real)height_pixels;
-    mp_set(this->y_size, xy_min_size);
-    mp_mul_d(this->x_size, xy_min_size, aspect_ratio);
-  }
-  else if (width_pixels < height_pixels)
-  {
-    real aspect_ratio = (real)width_pixels / (real)height_pixels;
-    mp_set(this->x_size, xy_min_size);
-    mp_div_d(this->y_size, xy_min_size, aspect_ratio);
-  }
-#endif
-
-
   // --- Store image dimensions.
 
   this->di = height_pixels;
@@ -134,47 +85,10 @@ Image *image_create(mp_real camera_x,
   this->_di = this->di + 1;
   this->_dj = this->dj + 1;
 
-#if 0  // OBSOLETE
-  mp_set(this->x_center, x_center);
-  mp_set(this->y_center, y_center);
-
-  {
-    mp_real half_x_size; mp_init2(half_x_size, mp_prec);
-    mp_real half_y_size; mp_init2(half_y_size, mp_prec);
-
-    mp_div_ui(half_x_size, this->x_size, 2);
-    mp_div_ui(half_y_size, this->y_size, 2);
-
-    mp_sub(this->x_min, this->x_center, half_x_size);
-    mp_sub(this->y_min, this->y_center, half_y_size);
-
-    mp_add(this->x_max, this->x_center, half_x_size);
-    mp_add(this->y_max, this->y_center, half_y_size);
-
-    mp_clear(half_y_size);
-    mp_clear(half_x_size);
-  }
-
-  // FIXME:  When doing 3D viewport, this will no longer make sense.
-  mp_div_ui(this->pixel_size, this->x_size, this->dj);
-#endif
-
 
   // --- Create Mandelbrot Set iteration object.
-  {
-    mp_real periodicity_epsilon;
-    mp_init2(periodicity_epsilon, mp_prec);
-#if 0  // OBSOLETE
-    mp_div_d(periodicity_epsilon, this->pixel_size,
-             pow(2, supersample_max_depth));
-#endif
-    mp_set_d(periodicity_epsilon, 0);
-    this->mandelbrot = mandelbrot_create(iter_max, mp_prec,
-                                         periodicity_epsilon);
-#if 0  // OBSOLETE
-    mp_clear(periodicity_epsilon);
-#endif
-  }
+
+  this->mandelbrot = mandelbrot_create(iter_max, mp_prec);
 
 
   // --- Store supersampling parameters.
@@ -183,13 +97,15 @@ Image *image_create(mp_real camera_x,
   this->supersample_interior_max_depth = supersample_interior_max_depth;
   this->supersample_exterior_min_depth = supersample_exterior_min_depth;
   this->supersample_exterior_max_depth = supersample_exterior_max_depth;
+  this->supersample_max_depth = MAX(this->supersample_interior_max_depth,
+                                    this->supersample_exterior_max_depth);
   this->supersample_solidarity = supersample_solidarity;
-  this->supersample = ((supersample_interior_max_depth > 0) ||
-                       (supersample_exterior_max_depth > 0))
-                   && (supersample_solidarity > 0);
+  this->supersample = (this->supersample_max_depth > 0)
+                   && (this->supersample_solidarity > 0);
 
 
-#if 0  // OBSOLETE -- Do this elsewhere, probably in the population method.
+
+#if 0  // FIXME -- Do this elsewhere, probably in the population method.
   // --- Tweak image position to account for non-center sampling of pixels.
   //     A supersampling depth of zero results in a tweak of 1/2 pixel.
   //     A depth of 1 results in a tweak of 1/4 pixel.  A depth of 2 results
@@ -202,8 +118,8 @@ Image *image_create(mp_real camera_x,
     mp_init2(xy_tweak, mp_prec);
     mp_div_d(xy_tweak, this->pixel_size, pow(2, 1 + supersample_max_depth));
 
-    mp_add(this->x_center, this->x_center, xy_tweak);
-    mp_sub(this->y_center, this->y_center, xy_tweak);
+    mp_add(this->target_x, this->target_x, xy_tweak);
+    mp_sub(this->target_y, this->target_y, xy_tweak);
     mp_add(this->x_min, this->x_min, xy_tweak);
     mp_sub(this->x_max, this->x_max, xy_tweak);
     mp_add(this->y_min, this->y_min, xy_tweak);
@@ -267,115 +183,36 @@ void image_destroy(Image **p_this)
   assert(this->_pixels);
   mem_dealloc(&this->_pixels);
 
-  assert(this->palette);
-  palette_destroy(&this->palette);
-
-  assert(this->camera);
-  camera_destroy(&this->camera);
-
   assert(this->mandelbrot);
   mandelbrot_destroy(&this->mandelbrot);
-
-#if 0  // OBSOLETE
-  mp_clear(this->x_center);
-  mp_clear(this->y_center);
-  mp_clear(this->x_size);
-  mp_clear(this->y_size);
-  mp_clear(this->x_min);
-  mp_clear(this->y_min);
-  mp_clear(this->x_max);
-  mp_clear(this->y_max);
-  mp_clear(this->pixel_size);
-  mp_clear(this->periodicity_epsilon);
-#endif
 
   mem_dealloc(p_this);
 }
 
 
 //-----------------------------------------------------------------------------
-// MAP IMAGE COORDINATES TO M-SET COORDINATES
-
-#if 0  // OBSOLETE
-private_method
-bool image_get_argand_point(Image *this,
-                            real i, real j,
-                            mp_real *x, mp_real *y)
-{
-  assert(this); assert(x); assert(y);
-  assert(i >= 0); assert(i <= (real)this->di);
-  assert(j >= 0); assert(j <= (real)this->dj);
-
-  //mp_lerp_d(*x, (real)j / (real)this->dj, this->x_min, this->x_max);
-  //mp_lerp_d(*y, (real)i / (real)this->di, this->y_max, this->y_min);
-
-  mp_mul_d(*x, this->x_size, (real)j / (real)this->dj);
-  mp_add(*x, this->x_min, *x);
-
-  mp_mul_d(*y, this->y_size, (real)i / (real)this->di);
-  mp_sub(*y, this->y_max, *y);
-
-  return true;
-}
-#endif
-
-
-//-----------------------------------------------------------------------------
 // DETERMINE WHETHER PIXEL NEEDS SUPERSAMPLING
 
 private_inline_method
-bool image_pixel_needs_supersampling(Image *this, Pixel pixel,
-                                     float32 solidarity, int ss_depth)
+bool image_pixel_needs_supersampling(const Image *this,
+                                     const Pixel pixel,
+                                     const float32 solidarity,
+                                     const int ss_depth)
 {
-  // Start with specified solidarity from configuration.
-  float32 required_solidarity = this->supersample_solidarity;
-
-  // Adjust required solarity downward (allow sloppiness) based on current
-  // supersampling depth.  For example:
-  //
-  // Depth         0      1      2      3      4      5      6      7      8   
-  // -------------------------------------------------------------------------
-  // Required    0.999  0.998  0.996  0.992  0.984  0.968  0.936  0.872  0.744
-  // Required    0.990  0.980  0.960  0.920  0.840  0.680  0.360    -      -
-  // Required    0.980  0.960  0.920  0.840  0.680  0.360    -      -      -
-  // Required    0.970  0.940  0.880  0.760  0.520  0.040    -      -      -
-  // Required    0.960  0.920  0.840  0.680  0.360    -      -      -      -
-  // Required    0.950  0.900  0.800  0.600  0.200    -      -      -      -
-  // Required    0.940  0.880  0.760  0.520  0.040    -      -      -      -
-  // Required    0.930  0.860  0.720  0.440    -      -      -      -      -
-  // Required    0.920  0.840  0.680  0.360    -      -      -      -      -
-  // Required    0.910  0.820  0.640  0.280    -      -      -      -      -
-  // Required    0.900  0.800  0.600  0.200    -      -      -      -      -
-  // Required    0.850  0.700  0.400    -      -      -      -      -      -
-  // Required    0.800  0.600  0.200    -      -      -      -      -      -
-  // Required    0.750  0.500    -      -      -      -      -      -      -
-  // Required    0.700  0.400    -      -      -      -      -      -      -
-  // Required    0.650  0.300    -      -      -      -      -      -      -
-  // Required    0.600  0.200    -      -      -      -      -      -      -
-  // Required    0.550  0.100    -      -      -      -      -      -      -
-  // Required    0.500  0.000    -      -      -      -      -      -      -
-  //
-  // NOTE:  Is this adjustment really a good thing?  Is it useful?  Or should
-  // it be removed?
-  // Updated NOTE:  No, I don't think it's a good thing.  It causes little
-  // bright spots not to be removed properly at high depths like 4.  I'm
-  // removing this adjustment.
-  //required_solidarity = 1 - ((1 - required_solidarity) * (1 << ss_depth));
-
-  // Now decide based on the adjusted requirement for solidarity, the nature of
-  // the pixel, the minimum and maximum supersampling depths, and the current
+  // Decide based on the requirement for solidarity, the nature of the pixel,
+  // the minimum and maximum supersampling depths, and the current
   // supersampling depth.
   if (pixel_is_interior(pixel))
   {
     return (ss_depth < this->supersample_interior_min_depth) ||
            ((ss_depth < this->supersample_interior_max_depth) &&
-            (solidarity < required_solidarity));
+            (solidarity < this->supersample_solidarity));
   }
   else
   {
     return (ss_depth < this->supersample_exterior_min_depth) ||
            ((ss_depth < this->supersample_exterior_max_depth) &&
-            (solidarity < required_solidarity));
+            (solidarity < this->supersample_solidarity));
   }
 }
 
@@ -384,7 +221,7 @@ bool image_pixel_needs_supersampling(Image *this, Pixel pixel,
 // COMPUTE NON-SUPERSAMPLED PIXEL
 
 private_method
-Pixel image_compute_pixel(Image *this, real i, real j)
+Pixel image_compute_pixel(const Image *this, real i, real j)
 {
   assert(this);
 
@@ -395,21 +232,74 @@ Pixel image_compute_pixel(Image *this, real i, real j)
   mp_init2(x, this->mandelbrot->conf.mp_prec);
   mp_init2(y, this->mandelbrot->conf.mp_prec);
 
-  // Map image coordinates to viewport coordinates.
-  int dij_min = (real)MIN(this->di, this->dj);
-  real du = this->dj / (real)dij_min;
-  real dv = this->di / (real)dij_min;
+  // Map image coordinates to viewport coordinates.  Attempt to set (du,dv)
+  // to (2,2) so that (u,v) covers the unit square, but take non-square image
+  // into account --- which means du and dv will not always be the same.
+  int dij_max = (real)MAX(this->di, this->dj);
+  real du = (this->dj / (real)dij_max) * 2.0;
+  real dv = (this->di / (real)dij_max) * 2.0;
   real u = lerp(j / this->dj, -du/2, +du/2);
   real v = lerp(i / this->di, +dv/2, -dv/2);
+
+  // Compute size of smallest possible subpixel in viewport coordinate system.
+  real uve = (2.0 / (real)dij_max) / pow(2, this->supersample_max_depth);
 
   // Map viewport coordinates to Argand plane coordinates.
   if (camera_get_argand_point(this->camera, u, v, &x, &y))
   {
-    mr = mandelbrot_compute(this->mandelbrot, x, y);
+    // Determine subpixel size around point (u,v) in the viewport.
+    mp_real e, e2, xe, ye;
+    mp_init2(e, this->mandelbrot->conf.mp_prec);
+    mp_init2(e2, this->mandelbrot->conf.mp_prec);
+    mp_init2(xe, this->mandelbrot->conf.mp_prec);
+    mp_init2(ye, this->mandelbrot->conf.mp_prec);
+
+    mp_set_d(e, 1e-6);  // Maximum possible epsilon.
+    if (camera_get_argand_point(this->camera, u - uve, v, &xe, &ye))
+    {
+      mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
+      mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
+      mp_add(e2, xe, ye);                 // e2 = xe + ye;
+      if (mp_less_p(e2, e))               // if (e2 < e)
+        mp_set(e, e2);                    //   e = e2;
+    }
+    if (camera_get_argand_point(this->camera, u + uve, v, &xe, &ye))
+    {
+      mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
+      mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
+      mp_add(e2, xe, ye);                 // e2 = xe + ye;
+      if (mp_less_p(e2, e))               // if (e2 < e)
+        mp_set(e, e2);                    //   e = e2;
+    }
+    if (camera_get_argand_point(this->camera, u, v - uve, &xe, &ye))
+    {
+      mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
+      mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
+      mp_add(e2, xe, ye);                 // e2 = xe + ye;
+      if (mp_less_p(e2, e))               // if (e2 < e)
+        mp_set(e, e2);                    //   e = e2;
+    }
+    if (camera_get_argand_point(this->camera, u, v + uve, &xe, &ye))
+    {
+      mp_sub(xe, xe, x); mp_sqr(xe, xe);  // xe = (xe - x) ** 2;
+      mp_sub(ye, ye, y); mp_sqr(ye, ye);  // ye = (ye - y) ** 2;
+      mp_add(e2, xe, ye);                 // e2 = xe + ye;
+      if (mp_less_p(e2, e))               // if (e2 < e)
+        mp_set(e, e2);                    //   e = e2;
+    }
+    mp_sqrt(e, e);
+
+    // Now compute pixel.
+    mr = mandelbrot_compute(this->mandelbrot, x, y, e);
     pixel.color = palette_color_from_mandelbrot_result(this->palette, mr);
     pixel.interior_portion = mandelbrot_result_is_interior(mr)? 1.0 : 0.0;
     pixel.is_defined = true;
     pixel.is_interior_periodic = mandelbrot_result_is_interior_periodic(mr);
+
+    mp_clear(ye);
+    mp_clear(xe);
+    mp_clear(e2);
+    mp_clear(e);
   }
   else
   {
@@ -451,7 +341,7 @@ Pixel image_compute_pixel(Image *this, real i, real j)
 // CALCULATE SUPERSAMPLED PIXEL
 
 private_method
-Pixel image_compute_supersampled_pixel(Image *this,
+Pixel image_compute_supersampled_pixel(const Image *this,
                                        real i, real j, real di, real dj,
                                        Pixel pixel_00,
                                        int ss_depth)
@@ -876,7 +766,7 @@ void image_populate(Image *this)
 // OUTPUT IMAGE
 
 public_method
-void image_output(Image *this, FILE *stream, bool text_format)
+void image_output(const Image *this, FILE *stream, bool text_format)
 {
   assert(this);
 
@@ -999,7 +889,7 @@ float64 percentage(uint64 numerator, uint64 denominator)
 // command line.
 
 private_function
-char *special_format_mp_real(mp_real x, bool sign)
+char *special_format_mp_real(const mp_real x, const bool sign)
 {
   // Calculate bits of precision to the right of the decimal point by
   // subtracting the bits of precision to the left of the decimal point from
@@ -1034,7 +924,7 @@ char *special_format_mp_real(mp_real x, bool sign)
 // SPECIALLY FORMAT LARGE NUMBER FOR READABILITY
 
 private_function
-char *special_format_number(uint64 n)
+char *special_format_number(const uint64 n)
 {
   static char str[100];
 
@@ -1077,7 +967,8 @@ char *special_format_number(uint64 n)
 // FORMAT FRACTIONAL PIXEL COUNT FOR READABILITY
 
 private_method
-char *special_format_fractional_pixel_count(Image *this, float64 value)
+char *special_format_fractional_pixel_count(const Image *this,
+                                            const float64 value)
 {
   assert(this);
 
@@ -1105,7 +996,7 @@ char *special_format_fractional_pixel_count(Image *this, float64 value)
 // OUTPUT STATISTICS
 
 public_method
-void image_output_statistics(Image *this, FILE *stream)
+void image_output_statistics(const Image *this, FILE *stream)
 {
   assert(this);
 
@@ -1129,11 +1020,11 @@ void image_output_statistics(Image *this, FILE *stream)
 
   mp_fprintf(stream,
              "                      Center x:  %s\n",
-             special_format_mp_real(this->x_center, true));
+             special_format_mp_real(this->camera->target_x, true));
 
   mp_fprintf(stream,
              "                      Center y:  %s\n",
-             special_format_mp_real(this->y_center, true));
+             special_format_mp_real(this->camera->target_y, true));
 
 #if 0  // OBSOLETE -- FIXME
   mp_fprintf(stream,

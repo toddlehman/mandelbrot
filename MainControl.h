@@ -10,17 +10,20 @@
 
 typedef struct
 {
-  mp_real  camera_x;   // x-coordinate
-  mp_real  camera_y;   // y-coordinate
-  mp_real  camera_z;   // z-coordinate
-  mp_real  camera_d;   // distance to viewport
-  real     camera_oz;  // z-axis rotational angle (neg=right, pos=left)
-  real     camera_ox;  // x-axis rotational angle (neg=down, pos=up)
-  real     camera_oy;  // y-axis rotational angle (neg=left, pos=right)
+  // TODO:  These are currently unused.  They belong in the Mandelbrot
+  // iteration object.
+  mp_real  julia_x;
+  mp_real  julia_y;
 
-  mp_real  x_center;
-  mp_real  y_center;
-  mp_real  xy_min_size;
+  // FIXME:  These 7 parameters belong in a camera object, or as calls to
+  // property setters of a camera object.
+  mp_real  target_x;
+  mp_real  target_y;
+  real     target_camera_rho;
+  real     target_camera_theta;
+  real     target_camera_phi;
+  real     viewport_tilt;
+  real     viewport_fov;
 
   uint64   iter_max;
 
