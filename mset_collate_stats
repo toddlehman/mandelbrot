@@ -46,7 +46,7 @@ sub special_format_big_number ($)
 }
 
 
-my $total_panels = 0;
+my $total_tiles = 0;
 my $total_cpu_time = 0;
 my $total_pixels = 0;
 my $total_int_pixels = 0;
@@ -66,13 +66,13 @@ my $max_iter = undef;
 my $iter_buckets = {};
 
 my $subpixels_per_pixel = undef;
-my $pixels_per_panel = undef;
-my $panel_x_size = undef;
-my $panel_y_size = undef;
+my $pixels_per_tile = undef;
+my $tile_x_size = undef;
+my $tile_y_size = undef;
 
 my $total_area = 0;
-my $panel_size = undef;
-my $panel_area = undef;
+my $tile_size = undef;
+my $tile_area = undef;
 my $pixel_size = undef;
 my $pixel_area = undef;
 my $subpixel_size = undef;
@@ -88,7 +88,7 @@ while (<STDIN>)
 
   if (m/^Command line:/)
   {
-    $total_panels++;
+    $total_tiles++;
   }
   elsif (m/^Supersampling \S+ depth:\s+\d to (\d+)/)
   {
@@ -96,8 +96,8 @@ while (<STDIN>)
     my $spp = (2 ** $max_depth) ** 2;
     if (!defined($subpixels_per_pixel) || ($spp > $subpixels_per_pixel))
       { $subpixels_per_pixel = $spp; }
-    defined($panel_area) or die;
-    defined($pixels_per_panel) or die;
+    defined($tile_area) or die;
+    defined($pixels_per_tile) or die;
     defined($pixel_size) or die;
     $subpixel_size = $pixel_size / sqrt($subpixels_per_pixel);
     $subpixel_area = $subpixel_size * $subpixel_size;
@@ -107,22 +107,22 @@ while (<STDIN>)
     my ($key, $value, $value_extra) = ($1, $2, $3);
 
     if ($key eq "Size x")
-      { $panel_x_size = $value; }
+      { $tile_x_size = $value; }
     elsif ($key eq "Size y")
-      { $panel_y_size = $value;
-        $panel_y_size == $panel_x_size or die;
-        $panel_size = $panel_y_size;
-        $panel_area = $panel_x_size * $panel_y_size;
-        $total_area += $panel_area; }
+      { $tile_y_size = $value;
+        $tile_y_size == $tile_x_size or die;
+        $tile_size = $tile_y_size;
+        $tile_area = $tile_x_size * $tile_y_size;
+        $total_area += $tile_area; }
     elsif ($key eq "Maximum iterations")
       { $max_iter = $value; }
     elsif ($key eq "Pixel size")
       { $value_extra =~ s/^x //;  # KLUDGE
         $value_extra == $value or die;  # KLUDGE
-        $pixels_per_panel = $value * $value_extra;  # KLUDGE
-        defined($panel_area) or die;
-        $pixel_area = $panel_area / $pixels_per_panel;
-        $pixel_size = $panel_size / $value; }
+        $pixels_per_tile = $value * $value_extra;  # KLUDGE
+        defined($tile_area) or die;
+        $pixel_area = $tile_area / $pixels_per_tile;
+        $pixel_size = $tile_size / $value; }
     elsif ($key eq "CPU time")
       { $total_cpu_time += $value; }
     elsif ($key eq "Total pixels in image")
@@ -162,13 +162,13 @@ while (<STDIN>)
 
 print "=" x 79, "\n";
 
-printf "%30s: %34.30f (1/2^%.0f)\n", "Single panel size",
-       $panel_size,
-       log2(1 / $panel_size);
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single tile size",
+       $tile_size,
+       log2(1 / $tile_size);
 
-printf "%30s: %34.30f (1/2^%.0f)\n", "Single panel area",
-       $panel_area,
-       log2(1 / $panel_area);
+printf "%30s: %34.30f (1/2^%.0f)\n", "Single tile area",
+       $tile_area,
+       log2(1 / $tile_area);
 
 print "\n";
 
@@ -203,13 +203,13 @@ printf "%30s: %34.30f\n", "Total exterior area",
 print "\n";
 print "-" x 79, "\n";
 
-printf "%30s: %16d\n", "Total panels", $total_panels;
+printf "%30s: %16d\n", "Total tiles", $total_tiles;
 
-printf "%30s: %20.3f\n", "Total interior panels",
-       $total_int_pixels / $pixels_per_panel;
+printf "%30s: %20.3f\n", "Total interior tiles",
+       $total_int_pixels / $pixels_per_tile;
 
-printf "%30s: %20.3f\n", "Total exterior panels",
-       $total_ext_pixels / $pixels_per_panel;
+printf "%30s: %20.3f\n", "Total exterior tiles",
+       $total_ext_pixels / $pixels_per_tile;
 
 print "\n";
 

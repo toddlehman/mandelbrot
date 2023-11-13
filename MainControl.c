@@ -168,23 +168,23 @@ bool process_argument(MainControl *this, const char *str)
   const char *value = NULL;
 
   bool valid = false;
-  if ((value = argument_matches(key, "cx=")))
+  if ((value = argument_matches(key, "x=")))
   {
     mp_clear(this->x_center);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->x_center);
   }
-  else if ((value = argument_matches(key, "cy=")))
+  else if ((value = argument_matches(key, "y=")))
   {
     mp_clear(this->y_center);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->y_center);
   }
-  else if ((value = argument_matches(key, "cr=")))
+  else if ((value = argument_matches(key, "r=")))
   {
     mp_clear(this->xy_min_size);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->xy_min_size);
     mp_mul_d(this->xy_min_size, this->xy_min_size, 2, MP_ROUND);
   }
-  else if ((value = argument_matches(key, "cd=")))
+  else if ((value = argument_matches(key, "d=")))
   {
     mp_clear(this->xy_min_size);  // Assumes previously initialized to default.
     valid = fetch_mp_real_value(value, &this->xy_min_size);
@@ -201,17 +201,22 @@ bool process_argument(MainControl *this, const char *str)
   {
     valid = fetch_real_value(value, &this->yaw);
   }
-  else if ((value = argument_matches(key, "i=")))
+  else if ((value = argument_matches(key, "n=")))
   {
     valid = fetch_uint64_value(value, &this->iter_max);
   }
-  else if ((value = argument_matches(key, "px=")))
+  else if ((value = argument_matches(key, "di=")))
+  {
+    valid = fetch_int_value(value, &this->height_pixels);
+  }
+  else if ((value = argument_matches(key, "dj=")))
   {
     valid = fetch_int_value(value, &this->width_pixels);
   }
-  else if ((value = argument_matches(key, "py=")))
+  else if ((value = argument_matches(key, "dij=")))
   {
     valid = fetch_int_value(value, &this->height_pixels);
+    this->width_pixels = this->height_pixels;
   }
   else if ((value = argument_matches(key, "ssimin=")))
   {
@@ -229,7 +234,7 @@ bool process_argument(MainControl *this, const char *str)
   {
     valid = fetch_int_value(value, &this->supersample_exterior_max_depth);
   }
-  else if ((value = argument_matches(key, "ssd=")))
+  else if ((value = argument_matches(key, "ss=")))
   {
     int supersample_max_depth;
     valid = fetch_int_value(value, &supersample_max_depth);
@@ -246,12 +251,12 @@ bool process_argument(MainControl *this, const char *str)
     valid = fetch_real_value(value, &supersample_solidarity);
     this->supersample_solidarity = (float32)supersample_solidarity;
   }
-  else if ((value = argument_matches(key, "-s")))
+  else if ((value = argument_matches(key, "--stats")))
   {
     this->output_statistics = true;
     valid = true;
   }
-  else if ((value = argument_matches(key, "-t")))
+  else if ((value = argument_matches(key, "--text")))
   {
     this->output_image_text_format = true;
     valid = true;
