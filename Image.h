@@ -34,10 +34,10 @@ typedef struct
   mp_real  periodicity_epsilon;
 
   bool     supersample;
-  int      supersample_int_min_depth;
-  int      supersample_int_max_depth;
-  int      supersample_ext_min_depth;
-  int      supersample_ext_max_depth;
+  int      supersample_interior_min_depth;
+  int      supersample_interior_max_depth;
+  int      supersample_exterior_min_depth;
+  int      supersample_exterior_max_depth;
   float32  supersample_solidarity;
 
   uint64   iter_max;
@@ -55,10 +55,10 @@ Image;
 extern_public_constructor
   Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
                       int pixel_width, int pixel_height,
-                      int supersample_int_min_depth,
-                      int supersample_int_max_depth,
-                      int supersample_ext_min_depth,
-                      int supersample_ext_max_depth,
+                      int supersample_interior_min_depth,
+                      int supersample_interior_max_depth,
+                      int supersample_exterior_min_depth,
+                      int supersample_exterior_max_depth,
                       float32 supersample_solidarity,
                       uint64 iter_max);
 

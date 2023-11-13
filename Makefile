@@ -31,7 +31,8 @@ LIBS =
 ALL_SRC =	$(H_FILES) \
 		$(C_FILES) \
 		mset_image \
-		mset_zoom_make \
+		mset_make_map \
+		mset_make_zoom \
 		mset_queue_runner \
 		mset_blend_frames \
 		Makefile

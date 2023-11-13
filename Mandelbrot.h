@@ -6,18 +6,6 @@
 
 
 //-----------------------------------------------------------------------------
-// MANDELBROT CALCULATION STRUCTURE
-
-typedef struct
-{
-  uint64   iter_max;
-  int      mp_prec;
-  mp_real  periodicity_epsilon;
-}
-Mandelbrot;
-
-
-//-----------------------------------------------------------------------------
 // MANDELBROT RESULT STRUCTURE
 //
 // This is packed because it must be storable inside a pixel array.  Speed of
@@ -34,6 +22,63 @@ typedef struct
 MandelbrotResult;    // (24 bytes)
 
 #pragma pack(pop)
+
+
+//-----------------------------------------------------------------------------
+// MANDELBROT CONFIGURATION STRUCTURE
+//
+// This contains the parameters governing computation of samples.
+
+typedef struct
+{
+  uint64   iter_max;
+  int      mp_prec;
+  mp_real  periodicity_epsilon;
+}
+MandelbrotConfiguration;
+
+
+//-----------------------------------------------------------------------------
+// MANDELBROT RESULT STATISTICS STRUCTURE
+//
+// This keeps track of various statistics that are useful to know when choosing
+// parameters or just to satisfy curiosity.
+
+typedef struct
+{
+  //real    interior_area_relative;  // Belongs in Image structure.
+  //mp_real interior_area_absolute;  // Belongs in Image structure.
+
+  // For tracking both interior and exterior points.
+  uint64  total_iter;
+  uint64  total_probes;
+  uint64  total_probes_uniterated;
+
+  // For tracking interior points.
+  uint64  interior_iter;
+  uint64  interior_probes;
+  uint64  interior_probes_uniterated;
+  uint64  interior_probes_aperiodic;
+  uint64  interior_probes_by_log2_iter[64];
+
+  // For tracking exterior points.
+  uint64  exterior_iter;
+  uint64  exterior_probes;
+  uint64  exterior_probes_uniterated;
+  uint64  exterior_probes_by_log2_iter[64];
+}
+MandelbrotResultStatistics;
+
+
+//-----------------------------------------------------------------------------
+// MANDELBROT CALCULATION STRUCTURE
+
+typedef struct
+{
+  MandelbrotConfiguration     conf;
+  MandelbrotResultStatistics  stats;
+}
+Mandelbrot;
 
 
 //-----------------------------------------------------------------------------
@@ -58,6 +103,13 @@ public_inline_function
 bool mandelbrot_result_is_exterior(const MandelbrotResult mr)
 {
   return (mr.dwell != 0) && (mr.dwell != INFINITY);
+}
+
+//-----------------------------------------------------------------------------
+public_inline_function
+bool mandelbrot_result_is_exterior_uniterated(const MandelbrotResult mr)
+{
+  return (mr.dwell != 0) && (mr.dwell != INFINITY) && (mr.iter == 0);
 }
 
 //-----------------------------------------------------------------------------

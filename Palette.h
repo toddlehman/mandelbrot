@@ -16,9 +16,11 @@ typedef struct
   uint32     exterior_count;
   float64    *exterior_locations;
   LinearRGB  *exterior_colors;
-  LinearRGB  interior_iterated_color;
-  LinearRGB  interior_uniterated_color;
+
   LinearRGB  undefined_color;
+  LinearRGB  interior_iterated_periodic_color;
+  LinearRGB  interior_iterated_aperiodic_color;
+  LinearRGB  interior_uniterated_color;
 }
 Palette;
 
@@ -26,6 +28,7 @@ Palette;
 //-----------------------------------------------------------------------------
 // INLINE METHODS
 
+#if 0  // OBSOLETE
 //-----------------------------------------------------------------------------
 public_inline_method
 LinearRGB palette_undefined_color(Palette *this)
@@ -46,6 +49,7 @@ LinearRGB palette_interior_uniterated_color(Palette *this)
 {
   return this->interior_uniterated_color;
 }
+#endif
 
 
 //-----------------------------------------------------------------------------

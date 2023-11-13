@@ -54,10 +54,19 @@ Palette *palette_create(void)
   this->exterior_colors[i] = this->exterior_colors[0];
   this->exterior_locations[i] = 1.0;
 
-  this->undefined_color            = (LinearRGB) { 1.0, 1.0, 1.0 };  // White
-  this->interior_iterated_color    = (LinearRGB) { 0.0, 0.0, 0.0 };  // Black
-//this->interior_uniterated_color  = (LinearRGB) { 0.01,0.01,0.01};  // Dark gray
-  this->interior_uniterated_color  = (LinearRGB) { 0.0 ,0.0 ,0.0 };  // Black
+  this->undefined_color =
+    (LinearRGB) { 1.0, 1.0, 1.0 };  // White
+
+  this->interior_iterated_periodic_color =
+    (LinearRGB) { 0.0, 0.0, 0.0 };  // Black
+
+  this->interior_iterated_aperiodic_color =
+    (LinearRGB) { 0.0, 0.0, 0.0 };  // Black (for production)
+    //(LinearRGB) { 0.5, 0.5, 0.5 };  // Gray (for debugging)
+
+  this->interior_uniterated_color =
+    (LinearRGB) { 0.0 ,0.0 ,0.0 };  // Black (for production)
+    //(LinearRGB) { 0.02,0.02,0.02};  // Dark gray (for debugging)
 
   #if 0
   printf("Color palette:\n");
@@ -207,7 +216,14 @@ LinearRGB palette_color_from_mandelbrot_result(Palette *this,
     {
       if (mandelbrot_result_is_interior_iterated(mr))
       {
-        return this->interior_iterated_color;
+        if (mandelbrot_result_is_interior_aperiodic(mr))
+        {
+          return this->interior_iterated_aperiodic_color;
+        }
+        else
+        {
+          return this->interior_iterated_periodic_color;
+        }
       }
       else if (mandelbrot_result_is_interior_uniterated(mr))
       {

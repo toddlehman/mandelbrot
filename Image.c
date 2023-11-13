@@ -13,27 +13,27 @@
 public_constructor
 Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
                     int width_pixels, int height_pixels,
-                    int supersample_int_min_depth,
-                    int supersample_int_max_depth,
-                    int supersample_ext_min_depth,
-                    int supersample_ext_max_depth,
+                    int supersample_interior_min_depth,
+                    int supersample_interior_max_depth,
+                    int supersample_exterior_min_depth,
+                    int supersample_exterior_max_depth,
                     float32 supersample_solidarity,
                     uint64 iter_max)
 {
   // FIXME:  Move these two assertions to initialization code for each of these
   // modules.
   assert(sizeof(MandelbrotResult) == 24);  // To catch unexpected changes.
-  assert(sizeof(Pixel) == 40);  // To catch unexpected changes.
+  assert(sizeof(Pixel) == 20);  // To catch unexpected changes.
 
   assert(mp_sgn(xy_min_size) > 0);
   assert(width_pixels >= 1);
   assert(height_pixels >= 1);
-  assert(supersample_int_min_depth >= 0);
-  assert(supersample_int_max_depth >= 0);
-  assert(supersample_int_min_depth <= supersample_int_max_depth);
-  assert(supersample_ext_min_depth >= 0);
-  assert(supersample_ext_max_depth >= 0);
-  assert(supersample_ext_min_depth <= supersample_ext_max_depth);
+  assert(supersample_interior_min_depth >= 0);
+  assert(supersample_interior_max_depth >= 0);
+  assert(supersample_interior_min_depth <= supersample_interior_max_depth);
+  assert(supersample_exterior_min_depth >= 0);
+  assert(supersample_exterior_max_depth >= 0);
+  assert(supersample_exterior_min_depth <= supersample_exterior_max_depth);
   assert(supersample_solidarity >= 0);
   assert(supersample_solidarity <= 1);
   assert(iter_max > 0);
@@ -57,13 +57,12 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   // Now add enough more bits to support the resolution of a single pixel.
   bits += log2(MIN(width_pixels, height_pixels));
   // Now add enough more bits to support supersampling.
-  bits += MAX(supersample_int_max_depth, supersample_ext_max_depth);
+  bits += MAX(supersample_interior_max_depth, supersample_exterior_max_depth);
   // Now add a few guard bits.  12 is a bare minimum which just barely is
   // sufficient.  16 is a better value.
   bits += 16;
   // Finally, round up and use this as the required precision.
   int mp_prec = ceil(bits);
-  fprintf(stderr, "precision required:  %d bits\n", mp_prec);
   
   mp_init2(this->x_center, mp_prec); mp_init2(this->y_center, mp_prec);
   mp_init2(this->x_size,   mp_prec); mp_init2(this->y_size,   mp_prec);
@@ -127,13 +126,13 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
     mp_clear(periodicity_epsilon);
   }
 
-  this->supersample_int_min_depth = supersample_int_min_depth;
-  this->supersample_int_max_depth = supersample_int_max_depth;
-  this->supersample_ext_min_depth = supersample_ext_min_depth;
-  this->supersample_ext_max_depth = supersample_ext_max_depth;
+  this->supersample_interior_min_depth = supersample_interior_min_depth;
+  this->supersample_interior_max_depth = supersample_interior_max_depth;
+  this->supersample_exterior_min_depth = supersample_exterior_min_depth;
+  this->supersample_exterior_max_depth = supersample_exterior_max_depth;
   this->supersample_solidarity = supersample_solidarity;
-  this->supersample = ((supersample_int_max_depth > 0) ||
-                       (supersample_ext_max_depth > 0))
+  this->supersample = ((supersample_interior_max_depth > 0) ||
+                       (supersample_exterior_max_depth > 0))
                    && (supersample_solidarity > 0);
 
   this->_pixels = mem_alloc_clear(this->_di * this->_dj, sizeof(Pixel));
@@ -144,19 +143,26 @@ Image *image_create(mp_real x_center, mp_real y_center, mp_real xy_min_size,
   for (int i = 0; i < this->_di; i++)
   for (int j = 0; j < this->_dj; j++)
   {
-    this->pixels[i][j].mr = mandelbrot_result_undefined();
+    this->pixels[i][j].is_defined = 0;
   }
 
   this->palette = palette_create();
 
   this->interior_filler_pixel = (Pixel)
   {
-    .mr                = mandelbrot_result_interior_uniterated(),
-    .color             = palette_interior_uniterated_color(this->palette),
-    .supersample       = false,
-    .supersampled      = false,
-    .probed_top_edge   = false,
-    .probed_left_edge  = false,
+    #if 0  // OBSOLETE
+    .color                 = palette_interior_uniterated_color(this->palette),
+    #endif
+    .color                 = palette_color_from_mandelbrot_result(
+                               this->palette,
+                               mandelbrot_result_interior_uniterated()),
+    .interior_portion      = 1.0,
+    .is_defined            = true,
+    .is_interior_periodic  = false,
+    .supersample           = false,
+    .supersampled          = false,
+    .probed_top_edge       = false,
+    .probed_left_edge      = false,
   };
 
   return this;
@@ -205,9 +211,9 @@ void image_destroy(Image **p_this)
 // MAP IMAGE COORDINATES TO M-SET COORDINATES
 
 private_method
-bool image_compute_argand_point(Image *this,
-                                real i, real j,
-                                mp_real *x, mp_real *y)
+bool image_get_argand_point(Image *this,
+                            real i, real j,
+                            mp_real *x, mp_real *y)
 {
   assert(this); assert(x); assert(y);
   assert(i >= 0); assert(i <= (real)this->di);
@@ -269,16 +275,16 @@ bool image_pixel_needs_supersampling(Image *this, Pixel pixel,
   // Now decide based on the adjusted requirement for solidarity, the nature of
   // the pixel, the minimum and maximum supersampling depths, and the current
   // supersampling depth.
-  if (pixel_is_interior)
+  if (pixel_is_interior(pixel))
   {
-    return (ss_depth < this->supersample_int_min_depth) ||
-           ((ss_depth < this->supersample_int_max_depth) &&
+    return (ss_depth < this->supersample_interior_min_depth) ||
+           ((ss_depth < this->supersample_interior_max_depth) &&
             (solidarity < required_solidarity));
   }
   else
   {
-    return (ss_depth < this->supersample_ext_min_depth) ||
-           ((ss_depth < this->supersample_ext_max_depth) &&
+    return (ss_depth < this->supersample_exterior_min_depth) ||
+           ((ss_depth < this->supersample_exterior_max_depth) &&
             (solidarity < required_solidarity));
   }
 }
@@ -296,24 +302,29 @@ Pixel image_compute_pixel(Image *this, real i, real j)
 
   // Map image coordinates to Argand plane coordinates.
   mp_real x, y;
-  mp_init2(x, this->mandelbrot->mp_prec);
-  mp_init2(y, this->mandelbrot->mp_prec);
-  (void)image_compute_argand_point(this, i, j, &x, &y);
+  mp_init2(x, this->mandelbrot->conf.mp_prec);
+  mp_init2(y, this->mandelbrot->conf.mp_prec);
+  (void)image_get_argand_point(this, i, j, &x, &y);
 
   // Calculate iterations.
-  pixel.mr = mandelbrot_compute(this->mandelbrot, x, y);
+  MandelbrotResult mr = mandelbrot_compute(this->mandelbrot, x, y);
   mp_clear(y);
   mp_clear(x);
 
   // Output progress (for debugging).
   if (false) //if (this->show_progress)
     fprintf(stderr, "i=%7.2f  j=%7.2f  iter=%9llu\n",
-                    (double)i, (double)j, pixel.mr.iter);
+                    (double)i, (double)j, mr.iter);
 
   // Map iterations to color.
-  pixel.color = palette_color_from_mandelbrot_result(this->palette, pixel.mr);
+  pixel.color = palette_color_from_mandelbrot_result(this->palette, mr);
+
+  // Define interior portion.
+  pixel.interior_portion = mandelbrot_result_is_interior(mr)? 1.0 : 0.0;
 
   // Set flags.
+  pixel.is_defined = true;
+  pixel.is_interior_periodic = mandelbrot_result_is_interior_periodic(mr);
   pixel.supersample = false;
   pixel.supersampled = false;
   pixel.probed_top_edge = false;
@@ -346,6 +357,7 @@ Pixel image_compute_supersampled_pixel(Image *this,
   assert(this);
   assert(i >= 0); assert(i + di <= this->di);
   assert(j >= 0); assert(j + dj <= this->dj);
+  assert(pixel_00.is_defined);
 
   // Calculate intermediate subpixel values.
   Pixel pixel_01 = image_compute_pixel(this, i,        j+(dj/2));
@@ -388,23 +400,32 @@ Pixel image_compute_supersampled_pixel(Image *this,
   Pixel pixel;
   pixel.color = linear_rgb_average4(pixel_00.color, pixel_01.color,
                                     pixel_10.color, pixel_11.color);
-  pixel.mr.dwell = -1;
-  pixel.mr.period = -1;
-  pixel.mr.iter = pixel_00.mr.iter + pixel_01.mr.iter +
-                  pixel_10.mr.iter + pixel_11.mr.iter;
+  pixel.interior_portion = (pixel_00.interior_portion +
+                            pixel_01.interior_portion +
+                            pixel_10.interior_portion +
+                            pixel_11.interior_portion) / 4;
+  //fprintf(stderr, "i=%f j=%f di=%f dj=%f ss_depth=%d -> interior=%f\n",
+  //        (double)i, (double)j, (double)di, (double)dj, ss_depth,
+  //        (double)pixel.interior_portion);
 
-  if (0) //ss_depth > 1)  // KLUDGE
+  #if 0
+  if (ss_depth > 1)  // KLUDGE
   {
-    pixel.color = linear_rgb_lerp(solidarity,
-        palette_undefined_color(this->palette),
-        pixel.color);
+    pixel.color = linear_rgb_lerp(pow(solidarity, 0.5),
+                                  palette_undefined_color(this->palette),
+                                  pixel.color);
   }
+  #endif
 
+  pixel.is_defined = true;
+  pixel.is_interior_periodic = pixel_00.is_interior_periodic &&
+                               pixel_01.is_interior_periodic &&
+                               pixel_10.is_interior_periodic &&
+                               pixel_11.is_interior_periodic;
   pixel.supersampled = true;   // Supersampling accomplished for this pixel.
   pixel.supersample  = false;  // Supersampling not required for this pixel.
-
-  //pixel.probed_top_edge = false;
-  //pixel.probed_left_edge = false;
+  pixel.probed_top_edge = false;
+  pixel.probed_left_edge = false;
 
   return pixel;
 }
@@ -423,46 +444,40 @@ void image_populate_pixel(Image *this, int i, int j,
 
   Pixel *pixel = &this->pixels[i][j];
 
-  if (pixel_is_undefined(*pixel))
-    *pixel = image_compute_pixel(this, i, j);
-
-  if (pixel_is_interior(*pixel) && this->supersample)
+  if (!pixel->is_defined)
   {
-    bool interior = true;
+    *pixel = image_compute_pixel(this, i, j);
+    assert(pixel->is_defined);
+  }
+
+  if (pixel->is_interior_periodic && this->supersample)
+  {
+    bool all_interior = true;
 
     if (probe_top_edge && !pixel->probed_top_edge)
     {
-      int dsj = (1 << this->supersample_int_max_depth);
-      for (int sj = 1; interior && (sj < dsj); sj++)  // (Not sj = 0)
+      int dsj = (1 << this->supersample_interior_max_depth);
+      for (int sj = 1; all_interior && (sj < dsj); sj++)  // (Not sj = 0)
       {
         Pixel subpixel = image_compute_pixel(this, i, j+(real)sj/(real)dsj);
-        pixel->mr.iter += subpixel.mr.iter;
-        interior &= pixel_is_interior(subpixel);
+        all_interior &= subpixel.is_interior_periodic;
       }
       pixel->probed_top_edge = true;
     }
 
     if (probe_left_edge && !pixel->probed_left_edge)
     {
-      int dsi = (1 << this->supersample_int_max_depth);
-      for (int si = 1; interior && (si < dsi); si++)  // (Not si = 0)
+      int dsi = (1 << this->supersample_interior_max_depth);
+      for (int si = 1; all_interior && (si < dsi); si++)  // (Not si = 0)
       {
         Pixel subpixel = image_compute_pixel(this, i+(real)si/(real)dsi, j);
-        pixel->mr.iter += subpixel.mr.iter;
-        interior &= pixel_is_interior(subpixel);
+        all_interior &= subpixel.is_interior_periodic;
       }
       pixel->probed_left_edge = true;
     }
 
-    if (interior)
+    if (!all_interior)
     {
-      //pixel->mr.dwell = INFINITY;  // (Already set)
-      pixel->mr.period = -1;
-    }
-    else
-    {
-      pixel->mr.dwell = -1;
-      pixel->mr.period = -1;
       pixel->supersample = true;  // Mark for future refinement.
       pixel->supersampled = false;
     }
@@ -490,7 +505,7 @@ void image_refine_pixel(Image *this, int i, int j)
   // If the color change was significant, then mark the pixel's eight neighbors
   // as also now needing refinement.  (TODO: How much more quality does this
   // provide?  What is the cost?  A few quick experiments showed a slight
-  // increase in quality in external regions for a slight increase in cost.)
+  // increase in quality in exterior regions for a slight increase in cost.)
   float32 solidarity = linear_rgb_solidarity2(old_pixel.color, new_pixel.color);
   if (solidarity < this->supersample_solidarity)
   {
@@ -549,7 +564,7 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
 
       image_populate_pixel(this, i, j, probe_top_edge, probe_left_edge);
 
-      fill_block &= pixel_is_interior(this->pixels[i][j]);
+      fill_block &= this->pixels[i][j].is_interior_periodic;
     }
   }
   //fprintf(stderr, "done with boundary\n");
@@ -567,9 +582,8 @@ void image_populate_block(Image *this, int i0, int j0, int di, int dj)
     for (int i = i0 + 1; i <= i1 - 1; i++)
     for (int j = j0 + 1; j <= j1 - 1; j++)
     {
-      assert(pixel_is_undefined(this->pixels[i][j]));
-      if (pixel_is_undefined(this->pixels[i][j]))
-        this->pixels[i][j] = this->interior_filler_pixel;
+      assert(!this->pixels[i][j].is_defined);
+      this->pixels[i][j] = this->interior_filler_pixel;
     }
   }
   else if ((di >= 3) || (dj >= 3))
@@ -736,7 +750,7 @@ void image_output(Image *this, FILE *stream, bool text_format)
   for (int i = 0; i < this->di; i++)
   for (int j = 0; j < this->dj; j++)
   {
-    assert(pixel_is_defined(this->pixels[i][j]));
+    assert(this->pixels[i][j].is_defined);
   }
 
   fprintf(stream, "%s\n", text_format? "P3" : "P6");
@@ -838,264 +852,374 @@ float64 percentage(uint64 numerator, uint64 denominator)
 }
 
 
+
 //-----------------------------------------------------------------------------
-// OUTPUT IMAGE STATISTICS
+// SPECIALLY FORMAT HIGH-PRECISION REAL NUMBER FOR READABILITY
+//
+// This uses just the right number of digits and avoids the ugly exponential
+// format.
+//
+// FIXME:  This isn't quite right yet.  For example, the number 0.001 comes out
+// as "0.00099945068" when 39-bit precision is in use.  The MPFR exponential
+// format fares no better, producing "9.994506835938E-04".  I suppose the only
+// possible correct thing to do is to store the original strings passed by the
+// command line.
+
+private_function
+char *special_format_mp_real(mp_real x, bool sign)
+{
+  // Calculate bits of precision to the right of the decimal point by
+  // subtracting the bits of precision to the left of the decimal point from
+  // the total bits of precision.
+  double x_trunc = floor(abs(mp_get_d(x, MP_ROUND)));
+  int bits_left = (x_trunc >= 1)? (int)ceil(log2(x_trunc)) : 0;
+  int bits_right = mp_get_prec(x) - bits_left;
+  int digits_right = floor((double)bits_right / log2(10));
+
+  // Configure mp_printf() format.
+  char format[16];
+  snprintf(format, ELEMENT_COUNT(format),
+           sign? "%%+.%dRNF" : "%%.%dRNF",
+           digits_right);
+
+  // Format high-precision number.
+  static char str[10000];
+  mp_snprintf(str, ELEMENT_COUNT(str), format, x);
+
+  #if 0
+  // FIXME:  Overwrite the above with the correct-but-ugly exponential format.
+  mp_snprintf(str, ELEMENT_COUNT(str),
+              sign? "%+RNE" : "%RNE",
+              x);
+  #endif
+
+  return str;  // Not thread-safe; be careful!
+}
+
+
+//-----------------------------------------------------------------------------
+// SPECIALLY FORMAT LARGE NUMBER FOR READABILITY
+
+private_function
+char *special_format_number(uint64 n)
+{
+  static char str[100];
+
+  const char *units[] =
+  {
+    /* 0 */  "ones",
+    /* 1 */  "thousand",
+    /* 2 */  "million",
+    /* 3 */  "billion",
+    /* 4 */  "trillion",
+    /* 5 */  "quadrillion",
+    /* 6 */  "quintrillion",
+    /* 7 */  "sextillion",
+    /* 8 */  "septillion",
+    /* 9 */  "octillion",
+  };
+
+  float64 f = n;
+  int unit_index;
+  for (unit_index = 0;
+       f >= 1000;
+       unit_index++, f /= 1000)
+    ;
+
+  assert(unit_index < ELEMENT_COUNT(units));
+
+  snprintf(str, ELEMENT_COUNT(str),
+           f >= 100? "%.0f %s":
+           f >= 10?  "%.1f %s":
+           f >= 1?   "%.2f %s":
+                       "%f %s",
+           f,
+           units[unit_index]);
+
+  return str;  // Not thread-safe; be careful!
+}
+
+
+//-----------------------------------------------------------------------------
+// FORMAT FRACTIONAL PIXEL COUNT FOR READABILITY
+
+private_method
+char *special_format_fractional_pixel_count(Image *this, float64 value)
+{
+  assert(this);
+
+  int max_supersample_depth = this->supersample
+                                ?  MAX(this->supersample_interior_max_depth,
+                                    this->supersample_exterior_max_depth)
+                                : 0;
+
+  // Each successive supersampling depth results in one additional power of
+  // 4^-1, e.g., two extra digits base 10, as the fractions progress
+  // 0., 0.25, 0.0625, 0.015625, etc.
+  char format[16];
+  snprintf(format, ELEMENT_COUNT(format), "%%" "%d" "." "%d" "f",
+           20 + (2*max_supersample_depth) - (max_supersample_depth == 0? 1:0),
+           2 * max_supersample_depth);
+
+  static char str[100];
+  snprintf(str, ELEMENT_COUNT(str), format, value);
+
+  return str;  // Not thread-safe; be careful!
+}
+ 
+
+//-----------------------------------------------------------------------------
+// OUTPUT STATISTICS
 
 public_method
 void image_output_statistics(Image *this, FILE *stream)
 {
   assert(this);
 
-  uint64 total_interior_pixels = 0;
-  uint64 total_exterior_pixels = 0;
-  uint64 total_interior_iter = 0;
-  uint64 total_exterior_iter = 0;
+  MandelbrotConfiguration *conf = &(this->mandelbrot->conf);
+  MandelbrotResultStatistics *stats = &(this->mandelbrot->stats);
 
-  uint64 interior_tally_log2[64];
-  uint64 interior_tally_aperiodic = 0;
-  uint64 interior_tally_uniterated = 0;
-  for (int k = 0; k < ELEMENT_COUNT(interior_tally_log2); k++)
-    interior_tally_log2[k] = 0;
+  const char *hbar_thick = "========================================"
+                           "=======================================";
 
-  uint64 exterior_tally_log2[64];
-  uint64 exterior_tally_aperiodic = 0;
-  uint64 exterior_tally_uniterated = 0;
-  for (int k = 0; k < ELEMENT_COUNT(exterior_tally_log2); k++)
-    exterior_tally_log2[k] = 0;
+  real cpu_time = (real)clock() / (real)CLOCKS_PER_SEC;
+  if (cpu_time == 0) cpu_time = 0.001;
 
 
-  // --- Tally pixel categories.
+  // --- Configuration parameters
 
-  for (int i = 0; i < this->di; i++)
-  for (int j = 0; j < this->dj; j++)
-  {
-    Pixel pixel = this->pixels[i][j];
-
-    if (pixel_is_defined(pixel))
-    {
-      MandelbrotResult mr = pixel.mr;
-
-      if (mandelbrot_result_is_interior(mr))
-      {
-        total_interior_pixels++;
-        total_interior_iter += mr.iter;
-
-        if (mandelbrot_result_is_interior_iterated(mr))
-        {
-          if (mandelbrot_result_is_interior_aperiodic(mr))
-          {
-            interior_tally_aperiodic++;
-          }
-          else if (mandelbrot_result_is_interior_periodic(mr))
-          {
-            int k = (int)(log(mr.iter) / log(2));
-            interior_tally_log2[k]++;
-            // TODO:  Do something about talling the periods.
-          }
-        }
-        else
-        {
-          interior_tally_uniterated++;
-        }
-      }
-      else if (mandelbrot_result_is_exterior(pixel.mr))
-      {
-        total_exterior_pixels++;
-        total_exterior_iter += mr.iter;
-
-        if (mr.iter == 0)
-        {
-          exterior_tally_uniterated++;
-        }
-        #if 0  // OBSOLETE
-        else if (mr.iter == this->mandelbrot->iter_max)
-        {
-          // NOTE: This *can* occur due to loop unrolling, which occasionally
-          // may cause overage on the iterations.
-          assert(false);  // This should never occur.
-          exterior_tally_aperiodic++;
-        }
-        #endif
-        else
-        {
-          int k = (int)(log(mr.iter) / log(2));
-          exterior_tally_log2[k]++;
-        }
-      }
-      else
-      {
-        assert(false);
-      }
-    }
-    else // if (pixel_is_undefined(pixel))
-    {
-      assert(false);
-    }
-  }
-
-
-  // --- Print table.
-
-  uint64 total_pixels = total_interior_pixels + total_exterior_pixels;
-  assert(total_pixels == (uint64)this->di * (uint64)this->dj);
-
-  uint64 total_iter = total_interior_iter + total_exterior_iter;
-
-  mp_fprintf(stream,
-             "                     Center:  (%RNf,%RNf)\n",
-             this->x_center, this->y_center);
-
-  mp_fprintf(stream,
-             "                       Size:  (%RNf,%RNf)\n",
-             this->x_size, this->y_size);
+  fprintf(stream, "%s\n", hbar_thick);
 
   fprintf(stream,
-          "         Maximum iterations:  %llu\n",
-          this->mandelbrot->iter_max);
+          "         MP precision required:  %d bits\n",
+          conf->mp_prec);
+
+  mp_fprintf(stream,
+             "                      Center x:  %s\n",
+             special_format_mp_real(this->x_center, true));
+
+  mp_fprintf(stream,
+             "                      Center y:  %s\n",
+             special_format_mp_real(this->y_center, true));
+
+  mp_fprintf(stream,
+             "                        Size x:  %s\n",
+             special_format_mp_real(this->x_size, false));
+
+  mp_fprintf(stream,
+             "                        Size y:  %s\n",
+             special_format_mp_real(this->y_size, false));
 
   fprintf(stream,
-          "                 Pixel size:  %d x %d\n",
+          "            Maximum iterations:  %llu\n",
+          conf->iter_max);
+
+  fprintf(stream,
+          "                    Pixel size:  %d x %d\n",
           this->dj, this->di);
 
   fprintf(stream,
-          "Supersampling int min depth:  %d\n",
-          this->supersample_int_min_depth);
+          "  Supersampling interior depth:  %d to %d\n",
+          this->supersample_interior_min_depth,
+          this->supersample_interior_max_depth);
 
   fprintf(stream,
-          "Supersampling int max depth:  %d\n",
-          this->supersample_int_max_depth);
+          "  Supersampling exterior depth:  %d to %d\n",
+          this->supersample_exterior_min_depth,
+          this->supersample_exterior_max_depth);
 
   fprintf(stream,
-          "Supersampling ext min depth:  %d\n",
-          this->supersample_ext_min_depth);
-
-  fprintf(stream,
-          "Supersampling ext max depth:  %d\n",
-          this->supersample_ext_max_depth);
-
-  fprintf(stream,
-          "   Supersampling solidarity:  %f\n",
+          "      Supersampling solidarity:  %f\n",
           (double)this->supersample_solidarity);
 
   fprintf(stream, "\n");
 
-  fprintf(stream,
-          "               Total pixels: %20llu\n",
-          total_pixels);
+
+  // --- CPU time
+
+  fprintf(stream, "%s\n", hbar_thick);
 
   fprintf(stream,
-          "      Total interior pixels: %20llu (%.1f%%)\n",
-          total_interior_pixels,
+          "                      CPU time: %23.3f seconds\n",
+          (double)cpu_time);
+
+  fprintf(stream, "\n");
+
+
+  // --- Pixels
+
+  uint64 total_pixels_including_overscan =
+    this->supersample? (uint64)this->_di * (uint64)this->_dj:
+                       (uint64)this->di  * (uint64)this->dj;
+
+  uint64 total_pixels =
+                       (uint64)this->di  * (uint64)this->dj;
+
+  float64 total_interior_pixels = 0;
+  float64 total_exterior_pixels = 0;
+  for (int i = 0; i < this->di; i++)
+  for (int j = 0; j < this->dj; j++)
+  {
+    total_interior_pixels +=      this->pixels[i][j].interior_portion;
+    total_exterior_pixels += (1 - this->pixels[i][j].interior_portion);
+  }
+
+  if (this->supersample)
+  fprintf(stream,
+          "        Total pixels processed: %19.0f (%s)\n",
+          (double)total_pixels_including_overscan,
+          special_format_number(total_pixels_including_overscan));
+
+  fprintf(stream,
+          "         Total pixels in image: %19.0f (%s)\n",
+          (double)total_pixels,
+          special_format_number(total_pixels));
+
+  fprintf(stream,
+          "         Total interior pixels: %s (%.1f%% of image)\n",
+          special_format_fractional_pixel_count(this, total_interior_pixels),
           percentage(total_interior_pixels, total_pixels));
 
   fprintf(stream,
-          "      Total exterior pixels: %20llu (%.1f%%)\n",
-          total_exterior_pixels,
+          "         Total exterior pixels: %s (%.1f%% of image)\n",
+          special_format_fractional_pixel_count(this, total_exterior_pixels),
           percentage(total_exterior_pixels, total_pixels));
 
-  fprintf(stream, "\n");
-
   fprintf(stream,
-          "           Total iterations: %20llu\n",
-          total_iter);
-
-  fprintf(stream,
-          "  Total interior iterations: %20llu (%.1f%%)\n",
-          total_interior_iter,
-          percentage(total_interior_iter, total_iter));
-
-  fprintf(stream,
-          "  Total exterior iterations: %20llu (%.1f%%)\n",
-          total_exterior_iter,
-          percentage(total_exterior_iter, total_iter));
-
-  fprintf(stream, "\n");
-
-  fprintf(stream,
-          "         Average iterations: %24.3f\n",
-          ratio(total_iter, total_pixels));
-
-  fprintf(stream,
-          "Average interior iterations: %24.3f\n",
-          ratio(total_interior_iter, total_interior_pixels));
-
-  fprintf(stream,
-          "Average exterior iterations: %24.3f\n",
-          ratio(total_exterior_iter, total_exterior_pixels));
+          "             Pixels per second: %19.0f (%s)\n",
+          (double)total_pixels / (double)cpu_time,
+          special_format_number((uint64)((real)total_pixels/(real)cpu_time)));
 
   fprintf(stream, "\n");
 
 
-  char buf[100];
+  // --- Probes
+
+  fprintf(stream,
+          "                  Total probes: %19llu (%s)\n",
+          stats->total_probes,
+          special_format_number(stats->total_probes));
+
+  fprintf(stream,
+          "         Total interior probes: %19llu (%.1f%% of probes)\n",
+          stats->interior_probes,
+          percentage(stats->interior_probes, stats->total_probes));
+
+  fprintf(stream,
+          "         Total exterior probes: %19llu (%.1f%% of probes)\n",
+          stats->exterior_probes,
+          percentage(stats->exterior_probes, stats->total_probes));
+
+  fprintf(stream,
+          "             Probes per second: %19.0f (%s)\n",
+          (double)stats->total_probes / (double)cpu_time,
+          special_format_number((uint64)((real)stats->total_probes/(real)cpu_time)));
+
+  fprintf(stream, "\n");
 
 
-  // Print periodic orbit table.
+  // --- Iterations
 
-  fprintf(stream, "%25s  %20s  %9s  %9s\n",
-          "Period detected after", "Quantity", "Percentage", "Percentile");
-  fprintf(stream, "%25s  %20s  %9s  %9s\n",
-          "---------------------", "--------", "----------", "----------");
-  int max_interior_k = (int)(log(this->mandelbrot->iter_max) / log(2));
-  uint64 interior_tally_log2_running_total = 0;
+  fprintf(stream,
+          "              Total iterations: %19llu (%s)\n",
+          stats->total_iter,
+          special_format_number(stats->total_iter));
 
-  interior_tally_log2_running_total += interior_tally_uniterated;
-  sprintf(buf, "%s %llu", "(early-out)", UINT64_C(0));
-  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
-    buf,
-    interior_tally_uniterated,
-    percentage(interior_tally_uniterated, total_interior_pixels),
-    percentage(interior_tally_log2_running_total, total_interior_pixels));
-  for (int k = 0; k <= max_interior_k; k++)
+  fprintf(stream,
+          "     Total interior iterations: %19llu (%.1f%% of iterations)\n",
+          stats->interior_iter,
+          percentage(stats->interior_iter, stats->total_iter));
+
+  fprintf(stream,
+          "     Total exterior iterations: %19llu (%.1f%% of iterations)\n",
+          stats->exterior_iter,
+          percentage(stats->exterior_iter, stats->total_iter));
+
+  fprintf(stream,
+          "         Iterations per second: %19.0f (%s)\n",
+          (double)stats->total_iter / (double)cpu_time,
+          special_format_number((uint64)((real)stats->total_iter/(real)cpu_time)));
+
+  fprintf(stream, "\n");
+
+  fprintf(stream,
+          "     Avg. iterations per probe: %23.3f\n",
+          ratio(stats->total_iter, stats->total_probes));
+
+  fprintf(stream,
+          " Avg. iter. per interior probe: %23.3f\n",
+          ratio(stats->interior_iter, stats->interior_probes));
+
+  fprintf(stream,
+          " Avg. iter. per exterior probe: %23.3f\n",
+          ratio(stats->exterior_iter, stats->exterior_probes));
+
+  fprintf(stream,
+          "         Avg. probes per pixel: %23.3f\n",
+          ratio(stats->total_probes, total_pixels_including_overscan));
+
+  fprintf(stream, "\n");
+
+
+  // --- Iterations table
+
+  fprintf(stream, "%s\n", hbar_thick);
+  fprintf(stream,
+          "%13s  %13s  %7s %6s  %13s  %7s %6s\n",
+          "Iterations", "Interior", "%age", "%ile", "Exterior", "%age", "%ile");
+  fprintf(stream,
+          "%13s  %13s  %7s %6s  %13s  %7s %6s\n",
+          "----------", "--------", "-------", "-----", "--------", "-------", "-----");
+
+  uint64 accumulated_interior_probes = 0;
+  uint64 accumulated_exterior_probes = 0;
+
+  accumulated_interior_probes += stats->interior_probes_uniterated;
+  accumulated_exterior_probes += stats->exterior_probes_uniterated;
+
+  fprintf(stream,
+    "%13llu  %13llu %7.3f%% %5.1f%%  %13llu %7.3f%% %5.1f%%\n",
+    UINT64_C(0), 
+    stats->interior_probes_uniterated,
+    percentage(stats->interior_probes_uniterated, stats->interior_probes),
+    percentage(accumulated_interior_probes, stats->interior_probes),
+    stats->exterior_probes_uniterated,
+    percentage(stats->exterior_probes_uniterated, stats->exterior_probes),
+    percentage(accumulated_exterior_probes, stats->exterior_probes));
+
+  int max_k = (int)floor(log2(conf->iter_max));
+  for (int k = 0; k <= max_k; k++)
   {
-    interior_tally_log2_running_total += interior_tally_log2[k];
-    fprintf(stream, "%25llu  %20llu  %9.6f%% %10.6f%%\n",
+    accumulated_interior_probes += stats->interior_probes_by_log2_iter[k];
+    accumulated_exterior_probes += stats->exterior_probes_by_log2_iter[k];
+
+    fprintf(stream,
+      "%13llu  %13llu %7.3f%% %5.1f%%  %13llu %7.3f%% %5.1f%%\n",
       UINT64_C(1) << k,
-      interior_tally_log2[k],
-      percentage(interior_tally_log2[k], total_interior_pixels),
-      percentage(interior_tally_log2_running_total, total_interior_pixels));
+      stats->interior_probes_by_log2_iter[k],
+      percentage(stats->interior_probes_by_log2_iter[k],
+                 stats->interior_probes),
+      percentage(accumulated_interior_probes, stats->interior_probes),
+                 stats->exterior_probes_by_log2_iter[k],
+      percentage(stats->exterior_probes_by_log2_iter[k],
+                 stats->exterior_probes),
+      percentage(accumulated_exterior_probes,
+                 stats->exterior_probes));
   }
-  interior_tally_log2_running_total += interior_tally_aperiodic;
-  sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
-  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
-    buf,
-    interior_tally_aperiodic,
-    percentage(interior_tally_aperiodic, total_interior_pixels),
-    percentage(interior_tally_log2_running_total, total_interior_pixels));
+
+  accumulated_interior_probes += stats->interior_probes_aperiodic;
+  fprintf(stream,
+    "%13llu  %13llu %7.3f%% %5.1f%%\n",
+    conf->iter_max,
+    stats->interior_probes_aperiodic,
+    percentage(stats->interior_probes_aperiodic, stats->interior_probes),
+    percentage(accumulated_interior_probes, stats->interior_probes));
+
   fprintf(stream, "\n");
 
-  // Print escaped-point table.
-
-  fprintf(stream, "%25s  %20s  %9s  %9s\n",
-          "Escaped after", "Quantity", "Percentage", "Percentile");
-  fprintf(stream, "%25s  %20s  %9s  %9s\n",
-          "-------------", "--------", "----------", "----------");
-  int max_exterior_k = (int)(log(this->mandelbrot->iter_max) / log(2));
-  uint64 exterior_tally_log2_running_total = 0;
-
-  exterior_tally_log2_running_total += exterior_tally_uniterated;
-  sprintf(buf, "%s %llu", "(early-out)", UINT64_C(0));
-  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
-    buf,
-    exterior_tally_uniterated,
-    percentage(exterior_tally_uniterated, total_exterior_pixels),
-    percentage(exterior_tally_log2_running_total, total_exterior_pixels));
-  for (int k = 0; k <= max_exterior_k; k++)
-  {
-    exterior_tally_log2_running_total += exterior_tally_log2[k];
-    fprintf(stream, "%25llu  %20llu  %9.6f%% %10.6f%%\n",
-      UINT64_C(1) << k,
-      exterior_tally_log2[k],
-      percentage(exterior_tally_log2[k], total_exterior_pixels),
-      percentage(exterior_tally_log2_running_total, total_exterior_pixels));
-  }
-  exterior_tally_log2_running_total += exterior_tally_aperiodic;
-  sprintf(buf, "%s %llu", "(never)", this->mandelbrot->iter_max);
-  fprintf(stream, "%25s  %20llu  %9.6f%% %10.6f%%\n",
-    buf,
-    exterior_tally_aperiodic,
-      percentage(exterior_tally_aperiodic, total_exterior_pixels),
-      percentage(exterior_tally_log2_running_total, total_exterior_pixels));
 
   fflush(stream);
 }
 
+
+//-----------------------------------------------------------------------------

@@ -28,18 +28,20 @@ PixelEdge;
 
 typedef struct
 {
-  MandelbrotResult  mr;                                  // 24 bytes
-  LinearRGB         color;                               // 12 bytes
-                                              // Subtotal:  36 bytes
+  LinearRGB  color;                    // 12 bytes
 
-  bool              supersample:1;                       //  1 bit
-  bool              supersampled:1;                      //  1 bit
-  bool              probed_top_edge:1;                   //  1 bit
-  bool              probed_left_edge:1;                  //  1 bit
-  uint              padding:28;                          // 28 bits
-                                              // Subtotal:   4 bytes
+  float32    interior_portion;         //  4 bytes
+
+  bool       is_defined:1;             //  1 bit
+  bool       is_interior_periodic:1;   //  1 bit
+  bool       supersample:1;            //  1 bit
+  bool       supersampled:1;           //  1 bit
+  bool       probed_top_edge:1;        //  1 bit
+  bool       probed_left_edge:1;       //  1 bit
+  uint       padding:26;               // 26 bits
+                            // Subtotal:   4 bytes
 }
-Pixel;                                           // Total:  40 bytes
+Pixel;                         // Total:  20 bytes
 
 #pragma pack(pop)
 
@@ -47,31 +49,40 @@ Pixel;                                           // Total:  40 bytes
 //-----------------------------------------------------------------------------
 // PUBLIC INLINE FUNCTIONS
 
+#if 0  // OBSOLETE
 //-----------------------------------------------------------------------------
 public_inline_function
 bool pixel_is_undefined(const Pixel pixel)
 {
-  return mandelbrot_result_is_undefined(pixel.mr);
+  return !pixel.defined;
 }
 
 //-----------------------------------------------------------------------------
 public_inline_function
 bool pixel_is_defined(const Pixel pixel)
 {
-  return mandelbrot_result_is_defined(pixel.mr);
+  return pixel.defined;
 }
+#endif
 
 //-----------------------------------------------------------------------------
 public_inline_function
 bool pixel_is_interior(const Pixel pixel)
 {
-  return mandelbrot_result_is_interior(pixel.mr);
+  return (pixel.interior_portion == 1.0);
 }
 
 //-----------------------------------------------------------------------------
 public_inline_function
 bool pixel_is_exterior(const Pixel pixel)
 {
-  return mandelbrot_result_is_exterior(pixel.mr);
+  return (pixel.interior_portion == 0.0);
+}
+
+//-----------------------------------------------------------------------------
+public_inline_function
+bool pixel_is_mixed(const Pixel pixel)
+{
+  return (pixel.interior_portion > 0.0) && (pixel.interior_portion < 1.0);
 }
 

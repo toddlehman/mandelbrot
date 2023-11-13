@@ -215,19 +215,19 @@ bool process_argument(MainControl *this, const char *str)
   }
   else if ((value = argument_matches(key, "ssimin=")))
   {
-    valid = fetch_int_value(value, &this->supersample_int_min_depth);
+    valid = fetch_int_value(value, &this->supersample_interior_min_depth);
   }
   else if ((value = argument_matches(key, "ssimax=")))
   {
-    valid = fetch_int_value(value, &this->supersample_int_max_depth);
+    valid = fetch_int_value(value, &this->supersample_interior_max_depth);
   }
   else if ((value = argument_matches(key, "ssemin=")))
   {
-    valid = fetch_int_value(value, &this->supersample_ext_min_depth);
+    valid = fetch_int_value(value, &this->supersample_exterior_min_depth);
   }
   else if ((value = argument_matches(key, "ssemax=")))
   {
-    valid = fetch_int_value(value, &this->supersample_ext_max_depth);
+    valid = fetch_int_value(value, &this->supersample_exterior_max_depth);
   }
   else if ((value = argument_matches(key, "sss=")))
   {
@@ -295,10 +295,10 @@ int main (int arg_count, const char *args[])
   this->iter_max = 10000;
   this->width_pixels = 8;
   this->height_pixels = 8;
-  this->supersample_int_min_depth = 0;
-  this->supersample_int_max_depth = 0;
-  this->supersample_ext_min_depth = 0;
-  this->supersample_ext_max_depth = 0;
+  this->supersample_interior_min_depth = 0;
+  this->supersample_interior_max_depth = 0;
+  this->supersample_exterior_min_depth = 0;
+  this->supersample_exterior_max_depth = 0;
   this->supersample_solidarity = 0;
   this->output_statistics = false;
   this->output_image_text_format = isatty(fileno(stdout));
@@ -316,10 +316,12 @@ int main (int arg_count, const char *args[])
   if (!valid)
     usage_exit(args[0]);
 
-  if (!(this->supersample_int_min_depth <= this->supersample_int_max_depth))
+  if (!(this->supersample_interior_min_depth <=
+        this->supersample_interior_max_depth))
     error_exit("Supersampling interior minimum depth must be "
                "less than or equal to maximum depth.");
-  if (!(this->supersample_ext_min_depth <= this->supersample_ext_max_depth))
+  if (!(this->supersample_exterior_min_depth <=
+        this->supersample_exterior_max_depth))
     error_exit("Supersampling exterior minimum depth must be "
                "less than or equal to maximum depth.");
 
@@ -338,10 +340,10 @@ int main (int arg_count, const char *args[])
     this->xy_min_size,
     this->width_pixels,
     this->height_pixels,
-    this->supersample_int_min_depth,
-    this->supersample_int_max_depth,
-    this->supersample_ext_min_depth,
-    this->supersample_ext_max_depth,
+    this->supersample_interior_min_depth,
+    this->supersample_interior_max_depth,
+    this->supersample_exterior_min_depth,
+    this->supersample_exterior_max_depth,
     this->supersample_solidarity,
     this->iter_max);
 

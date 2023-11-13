@@ -21,10 +21,10 @@ typedef struct
 
   int      width_pixels;
   int      height_pixels;
-  int      supersample_int_min_depth;
-  int      supersample_int_max_depth;
-  int      supersample_ext_min_depth;
-  int      supersample_ext_max_depth;
+  int      supersample_interior_min_depth;
+  int      supersample_interior_max_depth;
+  int      supersample_exterior_min_depth;
+  int      supersample_exterior_max_depth;
   float32  supersample_solidarity;
 
   bool     output_statistics;

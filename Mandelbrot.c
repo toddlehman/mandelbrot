@@ -99,7 +99,7 @@ real mandelbrot_max_scalar_value_during_iteration()
 
 
 //-----------------------------------------------------------------------------
-// ALLOCATE
+// CREATE
 
 public_constructor
 Mandelbrot *mandelbrot_create(uint64 iter_max,
@@ -108,25 +108,53 @@ Mandelbrot *mandelbrot_create(uint64 iter_max,
 {
   assert(iter_max > 0);
   assert(mp_prec >= 16);
-  //assert(mp_prec >= 64);
   assert(mp_prec >= mp_get_prec(periodicity_epsilon));
   assert(mp_sgn(periodicity_epsilon) >= 0);
 
   Mandelbrot *this = mem_alloc(1, sizeof(*this));
 
-  this->iter_max = iter_max;
 
-  this->mp_prec = mp_prec;
+  // Initialize configuration.
 
-  mp_init2(this->periodicity_epsilon, mp_prec);
-  mp_set(this->periodicity_epsilon, periodicity_epsilon, MP_ROUND);
+  this->conf.iter_max = iter_max;
+
+  this->conf.mp_prec = mp_prec;
+
+  mp_init2(this->conf.periodicity_epsilon, mp_prec);
+  mp_set(this->conf.periodicity_epsilon, periodicity_epsilon, MP_ROUND);
+
+
+  // Initialize (zero out) statistics.
+
+  this->stats.total_iter = 0;
+  this->stats.total_probes = 0;
+  this->stats.total_probes_uniterated = 0;
+
+  this->stats.interior_iter = 0;
+  this->stats.interior_probes = 0;
+  this->stats.interior_probes_uniterated = 0;
+  this->stats.interior_probes_aperiodic = 0;
+
+  this->stats.exterior_iter = 0;
+  this->stats.exterior_probes = 0;
+  this->stats.exterior_probes_uniterated = 0;
+
+  assert(ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter) ==
+         ELEMENT_COUNT(this->stats.exterior_probes_by_log2_iter));
+  int k_max = ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter) - 1;
+  for (int k = 0; k <= k_max; k++)
+  {
+    this->stats.interior_probes_by_log2_iter[k] = 0;
+    this->stats.exterior_probes_by_log2_iter[k] = 0;
+  }
+
 
   return this;
 }
 
 
 //-----------------------------------------------------------------------------
-// DEALLOCATE
+// DESTROY
 
 public_destructor
 void mandelbrot_destroy(Mandelbrot **p_this)
@@ -136,7 +164,7 @@ void mandelbrot_destroy(Mandelbrot **p_this)
 
   assert(this);
 
-  mp_clear(this->periodicity_epsilon);
+  mp_clear(this->conf.periodicity_epsilon);
   
   mem_dealloc(p_this);
 }
@@ -734,23 +762,74 @@ MandelbrotResult mandelbrot_compute_high_precision(const mp_real cx,
 public_method
 MandelbrotResult mandelbrot_compute(Mandelbrot *this, mp_real cx, mp_real cy)
 {
-  if (this->mp_prec <= REAL_MANTISSA)
+  MandelbrotResult mr;
+
+
+  // --- Compute sample.
+
+  if (this->conf.mp_prec <= REAL_MANTISSA)
   {
-    return mandelbrot_compute_low_precision(
-             mp_get_d(cx, MP_ROUND),
-             mp_get_d(cy, MP_ROUND),
-             mp_get_d(this->periodicity_epsilon, MP_ROUND),
-             this->iter_max);
+    mr = mandelbrot_compute_low_precision(
+           mp_get_d(cx, MP_ROUND),
+           mp_get_d(cy, MP_ROUND),
+           mp_get_d(this->conf.periodicity_epsilon, MP_ROUND),
+           this->conf.iter_max);
   }
   else
   {
-    return mandelbrot_compute_high_precision(
-             cx, cy,
-             this->periodicity_epsilon,
-             this->iter_max);
+    mr = mandelbrot_compute_high_precision(
+           cx, cy,
+           this->conf.periodicity_epsilon,
+           this->conf.iter_max);
   }
+
+
+  // --- Accumulate statistics.
+
+  this->stats.total_iter += mr.iter;
+  this->stats.total_probes++;
+  this->stats.total_probes_uniterated += (mr.iter == 0);
+
+  if (mandelbrot_result_is_interior(mr))
+  {
+    this->stats.interior_iter += mr.iter;
+    this->stats.interior_probes++;
+
+    if (mandelbrot_result_is_interior_uniterated(mr))
+    {
+      this->stats.interior_probes_uniterated++;
+    }
+    else if (mandelbrot_result_is_interior_aperiodic(mr))
+    {
+      this->stats.interior_probes_aperiodic++;
+    }
+    else
+    {
+      uint log2_iter = (uint)floor(log2(mr.iter));
+      assert(log2_iter < ELEMENT_COUNT(this->stats.interior_probes_by_log2_iter));
+      this->stats.interior_probes_by_log2_iter[log2_iter]++;
+    }
+  }
+  else
+  {
+    this->stats.exterior_iter += mr.iter;
+    this->stats.exterior_probes++;
+
+    if (mandelbrot_result_is_exterior_uniterated(mr))
+    {
+      this->stats.exterior_probes_uniterated++;
+    }
+    else
+    {
+      uint log2_iter = (uint)floor(log2(mr.iter));
+      assert(log2_iter < ELEMENT_COUNT(this->stats.exterior_probes_by_log2_iter));
+      this->stats.exterior_probes_by_log2_iter[log2_iter]++;
+    }
+  }
+
+
+  return mr;
 }
 
 
 //-----------------------------------------------------------------------------
-
